@@ -11,10 +11,10 @@ return [
         'X-Requested-With',
         'Accept',
         'X-XSRF-TOKEN',
-        'X-HTTP-Method-Override',
-        'ngrok-skip-browser-warning'
+    'X-HTTP-Method-Override'
     ],
-    'exposed_headers' => [],
+    // Expose XSRF-TOKEN so frontend JS can read it for debugging if needed.
+    'exposed_headers' => ['XSRF-TOKEN'],
     'max_age' => 0,
     'supports_credentials' => true,
 ];
