@@ -18,7 +18,8 @@ return new class extends Migration
             $table->foreignId('reviewed_by')->nullable()->constrained('users');
             $table->timestamp('reviewed_at')->nullable();
             $table->text('admin_notes')->nullable();
-            $table->text('recommendation')->default('Review required to address potential security concerns.');
+            // TEXT columns cannot have a default value in MySQL. Make nullable and set defaults in seeders or application logic.
+            $table->text('recommendation')->nullable();
             $table->enum('status', ['pending', 'reviewed'])->default('pending');
             $table->boolean('is_custom_answer')->default(false);
             $table->string('selected_answer')->nullable(); // Store what was actually selected (e.g., "Others")
