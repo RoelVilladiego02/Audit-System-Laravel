@@ -24,11 +24,20 @@ class DebugAuditRequests
 
         $response = $next($request);
 
-        // Log response details
-        Log::debug('Audit Response', [
-            'status' => $response->status(),
-            'content' => $response->getContent()
-        ]);
+        // Log response details only in non-production and truncate content
+        if (app()->environment('local', 'testing') || config('app.debug')) {
+            $content = '';
+            try {
+                $content = mb_substr($response->getContent(), 0, 1000);
+            } catch (\Exception $e) {
+                $content = '[unreadable response]';
+            }
+
+            Log::debug('Audit Response', [
+                'status' => $response->status(),
+                'content' => $content
+            ]);
+        }
 
         return $response;
     }

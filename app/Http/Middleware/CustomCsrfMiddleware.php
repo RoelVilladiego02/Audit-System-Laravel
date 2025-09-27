@@ -33,10 +33,10 @@ class CustomCsrfMiddleware
             }
         }
 
-        // For other routes, check if we have a valid CSRF token
-        if ($request->isMethod('POST', 'PUT', 'PATCH', 'DELETE')) {
+        // For other routes, check if we have a valid CSRF token for mutating HTTP verbs
+        if (in_array($request->method(), ['POST', 'PUT', 'PATCH', 'DELETE'], true)) {
             $token = $request->header('X-XSRF-TOKEN') ?? $request->input('_token');
-            
+
             if (!$token || !$this->tokensMatch($request, $token)) {
                 return response()->json([
                     'message' => 'CSRF token mismatch.',
