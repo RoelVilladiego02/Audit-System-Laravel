@@ -34,13 +34,15 @@ class UserSeeder extends Seeder
         ];
 
         foreach ($users as $userData) {
-            User::create([
-                'name' => $userData['name'],
-                'email' => $userData['email'],
-                'password' => Hash::make('password'),
-                'role' => 'user',
-                'email_verified_at' => now(),
-            ]);
+            User::updateOrCreate(
+                ['email' => $userData['email']],
+                [
+                    'name' => $userData['name'],
+                    'password' => Hash::make('password'),
+                    'role' => 'user',
+                    'email_verified_at' => now(),
+                ]
+            );
         }
     }
 }

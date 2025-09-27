@@ -328,9 +328,15 @@ class AuditQuestionSeeder extends Seeder
         // AuditQuestion::truncate();
 
         foreach ($questions as $questionData) {
-            // Remove 'suggestions' key if present
+            // Remove 'suggestions' key and timestamps if present
             unset($questionData['suggestions']);
-            AuditQuestion::create($questionData);
+            unset($questionData['created_at'], $questionData['updated_at']);
+
+            // Use updateOrCreate keyed on the question text so the seeder is safe to run multiple times
+            AuditQuestion::updateOrCreate(
+                ['question' => $questionData['question']],
+                $questionData
+            );
         }
     }
 }
