@@ -1,7 +1,8 @@
 <?php
 
 return [
-    'paths' => ['api/*', 'sanctum/csrf-cookie'],
+    // Include auth/* so /auth/login and other auth endpoints receive CORS headers on preflight
+    'paths' => ['api/*', 'sanctum/csrf-cookie', 'auth/*'],
     'allowed_methods' => ['*'],
     'allowed_origins' => explode(',', env('CORS_ALLOWED_ORIGINS', 'https://audit-system-laravel-production.up.railway.app,https://audit-system-orpin.vercel.app')),
     'allowed_headers' => [
