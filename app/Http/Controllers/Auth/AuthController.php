@@ -89,7 +89,21 @@ class AuthController extends Controller
     public function logout(Request $request): JsonResponse
     {
         try {
-            $request->user()->currentAccessToken()->delete();
+            $current = $request->user()->currentAccessToken();
+            // TransientToken (used by Sanctum for session cookies) doesn't implement delete()
+            if ($current && is_object($current) && method_exists($current, 'delete')) {
+                $current->delete();
+            } else {
+                // Fallback: if using token via token() relation, attempt to revoke it
+                if (method_exists($request->user(), 'tokens')) {
+                    // Revoke any personal access token matching the plain text token if present
+                    try {
+                        $request->user()->tokens()->where('id', optional($current)->id)->delete();
+                    } catch (\Exception $e) {
+                        // ignore - best-effort
+                    }
+                }
+            }
             
             return response()->json([
                 'message' => 'Successfully logged out'
