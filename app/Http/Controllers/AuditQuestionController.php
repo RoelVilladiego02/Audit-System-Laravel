@@ -16,7 +16,7 @@ class AuditQuestionController extends Controller
     {
         try {
             $questions = AuditQuestion::active()
-                ->orderBy('created_at', 'desc')
+                ->orderBy('id')
                 ->get();
             return response()->json($questions);
         } catch (\Exception $e) {
