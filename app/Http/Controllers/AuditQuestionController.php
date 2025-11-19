@@ -121,9 +121,14 @@ class AuditQuestionController extends Controller
 
             // Check if question is being used in answers
             if ($auditQuestion->answers()->exists()) {
-                // Only allow minor updates if question is in use
-                $allowedFields = ['description', 'category'];
+                // Restrict mutable fields when answers exist, but allow updating risk criteria
+                $allowedFields = ['description', 'category', 'risk_criteria', 'possible_recommendation'];
                 $updateData = array_intersect_key($validated, array_flip($allowedFields));
+
+                if (isset($updateData['risk_criteria'])) {
+                    // Validate risk criteria against the stored possible answers
+                    $this->validateRiskCriteria($updateData['risk_criteria'], $auditQuestion->possible_answers ?? []);
+                }
                 
                 if (empty($updateData)) {
                     return response()->json([
