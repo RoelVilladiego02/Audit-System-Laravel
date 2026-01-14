@@ -124,7 +124,7 @@ class AuditSubmissionController extends Controller
     public function index(Request $request): JsonResponse
     {
         try {
-            $query = AuditSubmission::with(['user:id,name,email', 'reviewer:id,name,email'])
+            $query = AuditSubmission::with(['user:id,name,email,company', 'reviewer:id,name,email,company'])
                 ->withCount([
                     'answers',
                     'answers as reviewed_answers_count' => function ($q) {
@@ -148,6 +148,7 @@ class AuditSubmissionController extends Controller
                         'id' => (int) $submission->user->id,
                         'name' => (string) $submission->user->name,
                         'email' => (string) $submission->user->email,
+                        'company' => $submission->user->company,
                     ] : null,
                     'status' => (string) $submission->status,
                     'system_overall_risk' => $submission->system_overall_risk,
@@ -198,7 +199,7 @@ class AuditSubmissionController extends Controller
                 },
                 'answers.question:id,question,description,category,possible_answers,risk_criteria',
                 'answers.reviewer:id,name,email',
-                'user:id,name,email',
+                'user:id,name,email,company',
             ]);
 
             // Transform data with validation
@@ -216,6 +217,7 @@ class AuditSubmissionController extends Controller
                     'id' => (int) $submission->user->id,
                     'name' => (string) $submission->user->name,
                     'email' => (string) $submission->user->email,
+                    'company' => $submission->user->company,
                 ] : null,
                 'reviewer' => $submission->reviewed_by ? (
                     $submission->reviewer instanceof \App\Models\User && $submission->reviewer->isAdmin() ? [
@@ -620,7 +622,7 @@ class AuditSubmissionController extends Controller
                     })
                     ->count(),
                 'pending_answers' => AuditAnswer::pendingReview()->count(),
-                'recent_submissions' => AuditSubmission::with('user:id,name,email')
+                'recent_submissions' => AuditSubmission::with('user:id,name,email,company')
                     ->orderBy('created_at', 'desc')
                     ->limit(5)
                     ->get()
@@ -628,7 +630,12 @@ class AuditSubmissionController extends Controller
                         return [
                             'id' => (int) $sub->id,
                             'title' => (string) $sub->title,
-                            'user' => $sub->user ? (string) $sub->user->name : 'Unknown',
+                            'user' => $sub->user ? [
+                                'id' => (int) $sub->user->id,
+                                'name' => (string) $sub->user->name,
+                                'email' => (string) $sub->user->email,
+                                'company' => $sub->user->company,
+                            ] : 'Unknown',
                             'status' => (string) $sub->status,
                             'effective_overall_risk' => $sub->admin_overall_risk ?? $sub->system_overall_risk ?? 'pending',
                             'review_progress' => $this->calculateReviewProgress($sub),
