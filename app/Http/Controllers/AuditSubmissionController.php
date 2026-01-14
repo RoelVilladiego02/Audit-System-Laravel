@@ -144,6 +144,7 @@ class AuditSubmissionController extends Controller
                 return [
                     'id' => (int) $submission->id,
                     'title' => (string) $submission->title,
+                    'user_id' => (int) $submission->user_id,
                     'user' => $submission->user ? [
                         'id' => (int) $submission->user->id,
                         'name' => (string) $submission->user->name,
