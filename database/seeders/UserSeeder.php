@@ -14,22 +14,27 @@ class UserSeeder extends Seeder
             [
                 'name' => 'John Developer',
                 'email' => 'john@example.com',
+                'company' => 'TechCorp Inc',
             ],
             [
                 'name' => 'Sarah Security',
                 'email' => 'sarah@example.com',
+                'company' => 'SecureNet Ltd',
             ],
             [
                 'name' => 'Mike Manager',
                 'email' => 'mike@example.com',
+                'company' => 'BuildSystems Co',
             ],
             [
                 'name' => 'Lisa Analyst',
                 'email' => 'lisa@example.com',
+                'company' => 'DataFlow Solutions',
             ],
             [
                 'name' => 'David Engineer',
                 'email' => 'david@example.com',
+                'company' => 'CloudHost Systems',
             ]
         ];
 

@@ -32,6 +32,7 @@ class UserController extends Controller
             'name' => ['sometimes', 'string', 'max:255'],
             'email' => ['sometimes', 'string', 'email', 'max:255', 'unique:users,email,' . $user->id],
             'role' => ['sometimes', 'string', 'in:user,admin'],
+            'company' => ['sometimes', 'string', 'max:255', 'nullable'],
         ]);
 
         $user->update($validated);

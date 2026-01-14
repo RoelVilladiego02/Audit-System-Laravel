@@ -19,6 +19,7 @@ class AuthController extends Controller
                 'name' => ['required', 'string', 'max:255'],
                 'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
                 'password' => ['required', 'confirmed', Rules\Password::defaults()],
+                'company' => ['sometimes', 'string', 'max:255', 'nullable'],
             ]);
 
             /** @var \App\Models\User $user */
@@ -27,6 +28,7 @@ class AuthController extends Controller
                 'email' => $request->email,
                 'password' => Hash::make($request->password),
                 'role' => 'user', // Default role
+                'company' => $request->input('company'),
             ]);
 
             if (!$user) {
