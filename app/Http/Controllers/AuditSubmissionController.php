@@ -756,4 +756,44 @@ class AuditSubmissionController extends Controller
         $reviewedAnswers = $submission->answers()->whereNotNull('reviewed_by')->count();
         return round(($reviewedAnswers / $totalAnswers) * 100, 2);
     }
+
+    /**
+     * Delete an audit submission.
+     * Users can only delete their own submissions, while admins can delete any.
+     */
+    public function destroy(AuditSubmission $submission): JsonResponse
+    {
+        try {
+            // Authorization check - users can only delete their own submissions, admins can delete any
+            if ($submission->user_id !== auth()->id() && !auth()->user()->isAdmin()) {
+                return response()->json(['message' => 'Unauthorized'], 403);
+            }
+
+            $submissionTitle = $submission->title;
+            $submission->delete();
+
+            Log::info('Audit submission deleted', [
+                'submission_id' => $submission->id,
+                'submission_title' => $submissionTitle,
+                'deleted_by' => auth()->id(),
+                'deleted_by_admin' => auth()->user()->isAdmin(),
+            ]);
+
+            return response()->json([
+                'message' => 'Audit submission deleted successfully',
+                'deleted_submission_id' => $submission->id
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to delete audit submission: ' . $e->getMessage(), [
+                'submission_id' => $submission->id,
+                'user_id' => auth()->id(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return response()->json([
+                'message' => 'Failed to delete audit submission.',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
 }
