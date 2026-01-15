@@ -13,7 +13,7 @@ class UserController extends Controller
 {
     public function __construct()
     {
-        $this->middleware(['auth:sanctum', 'role:admin']);
+        $this->middleware(['auth:sanctum', 'role:admin'])->except(['updateProfile', 'updatePassword']);
     }
 
     public function index(): JsonResponse
