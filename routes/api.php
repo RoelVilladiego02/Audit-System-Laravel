@@ -27,6 +27,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::get('/user', [AuthController::class, 'user']);
 
+    // User profile routes - accessible to authenticated users
+    Route::patch('/user/profile', [UserController::class, 'updateProfile']);
+    Route::put('/user/password', [UserController::class, 'updatePassword']);
+
     // Routes accessible by both admin and users
     Route::get('/audit-questions', [AuditQuestionController::class, 'index']);
     Route::get('/audit-questions/{auditQuestion}', [AuditQuestionController::class, 'show']);
