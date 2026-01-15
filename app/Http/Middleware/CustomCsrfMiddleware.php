@@ -25,6 +25,7 @@ class CustomCsrfMiddleware
             'api/vulnerability-submissions*',
             'api/audit-questions*',
             'api/vulnerabilities*',
+            'api/user/*',
         ];
 
         foreach ($excludedRoutes as $route) {
