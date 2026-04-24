@@ -1108,4 +1108,51 @@ class AuditSubmissionController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Update submission title.
+     * Users can only update their own submissions, admins can update any submission.
+     */
+    public function updateTitle(Request $request, AuditSubmission $submission): JsonResponse
+    {
+        try {
+            // Authorization check - users can only update their own submissions, admins can update any
+            if ($submission->user_id !== auth()->id() && !auth()->user()->isAdmin()) {
+                return response()->json(['message' => 'Unauthorized'], 403);
+            }
+
+            $validated = $request->validate([
+                'title' => 'required|string|max:255|min:1',
+            ]);
+
+            $submission->update([
+                'title' => $validated['title']
+            ]);
+
+            return response()->json([
+                'message' => 'Submission title updated successfully.',
+                'submission' => [
+                    'id' => (int) $submission->id,
+                    'title' => (string) $submission->title,
+                    'updated_at' => $submission->updated_at,
+                ]
+            ]);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'message' => 'Validation failed.',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            Log::error('Failed to update submission title: ' . $e->getMessage(), [
+                'submission_id' => $submission->id,
+                'user_id' => auth()->id(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return response()->json([
+                'message' => 'Failed to update submission title.',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
+            ], 500);
+        }
+    }
 }

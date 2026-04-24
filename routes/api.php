@@ -93,6 +93,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/', [AuditSubmissionController::class, 'index'])->name('index');
         Route::get('/{submission}', [AuditSubmissionController::class, 'show'])->name('show');
         Route::delete('/{submission}', [AuditSubmissionController::class, 'destroy'])->name('destroy');
+        Route::patch('/{submission}/title', [AuditSubmissionController::class, 'updateTitle'])
+            ->where('submission', '[0-9]+')
+            ->name('update-title');
         
         // Draft functionality routes
         Route::post('/save-draft', [AuditSubmissionController::class, 'saveDraft'])->name('save-draft');
