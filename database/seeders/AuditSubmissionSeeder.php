@@ -52,7 +52,7 @@ class AuditSubmissionSeeder extends Seeder
 
             $submission = AuditSubmission::create([
                 'user_id' => (int)$users->random()->id,
-                'title' => $auditTitles[array_rand($auditTitles)] . ' - ' . fake()->date('Y-m'),
+                'title' => 'Audit Report',
                 'system_overall_risk' => $systemRisk,
                 'admin_overall_risk' => $adminRisk,
                 'status' => $status,
