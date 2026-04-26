@@ -46,12 +46,14 @@ return new class extends Migration
         }
 
         // Now make the column NOT NULL
-        Schema::table('audit_questions', function (Blueprint $table) {
-            $table->foreignId('questionnaire_set_id')
-                ->change()
-                ->constrained('audit_questionnaire_sets')
-                ->onDelete('cascade');
-        });
+        // Drop the existing nullable foreign key constraint
+        DB::statement('ALTER TABLE audit_questions DROP FOREIGN KEY audit_questions_questionnaire_set_id_foreign');
+        
+        // Modify the column definition
+        DB::statement('ALTER TABLE audit_questions MODIFY questionnaire_set_id BIGINT UNSIGNED NOT NULL');
+        
+        // Add the NOT NULL foreign key constraint
+        DB::statement('ALTER TABLE audit_questions ADD CONSTRAINT audit_questions_questionnaire_set_id_foreign FOREIGN KEY (questionnaire_set_id) REFERENCES audit_questionnaire_sets(id) ON DELETE CASCADE');
     }
 
     /**
@@ -59,12 +61,13 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('audit_questions', function (Blueprint $table) {
-            $table->foreignId('questionnaire_set_id')
-                ->nullable()
-                ->change()
-                ->constrained('audit_questionnaire_sets')
-                ->nullOnDelete();
-        });
+        // Drop the NOT NULL foreign key constraint
+        DB::statement('ALTER TABLE audit_questions DROP FOREIGN KEY audit_questions_questionnaire_set_id_foreign');
+        
+        // Revert the column to nullable
+        DB::statement('ALTER TABLE audit_questions MODIFY questionnaire_set_id BIGINT UNSIGNED NULL');
+        
+        // Add back the nullable foreign key constraint
+        DB::statement('ALTER TABLE audit_questions ADD CONSTRAINT audit_questions_questionnaire_set_id_foreign FOREIGN KEY (questionnaire_set_id) REFERENCES audit_questionnaire_sets(id) ON DELETE SET NULL');
     }
 };
