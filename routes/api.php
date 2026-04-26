@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\AuditQuestionController;
 use App\Http\Controllers\AuditSubmissionController;
+use App\Http\Controllers\QuestionnaireSetController;
 use App\Http\Controllers\VulnerabilitySubmissionController;
 use App\Http\Controllers\VulnerabilityController;
 use App\Http\Controllers\UserController;
@@ -34,6 +35,10 @@ Route::middleware('auth:sanctum')->group(function () {
     // Routes accessible by both admin and users
     Route::get('/audit-questions', [AuditQuestionController::class, 'index']);
     Route::get('/audit-questions/{auditQuestion}', [AuditQuestionController::class, 'show']);
+    
+    // Questionnaire set routes - accessible to authenticated users
+    Route::get('/questionnaire-sets/active', [QuestionnaireSetController::class, 'activeOnly']);
+    Route::get('/questionnaire-sets/{set}', [QuestionnaireSetController::class, 'show']);
 
     // Admin routes with optimized middleware
     Route::middleware(['role:admin'])->group(function () {
@@ -41,6 +46,20 @@ Route::middleware('auth:sanctum')->group(function () {
         
         // Analytics route with query parameter validation
         Route::get('/analytics', [AnalyticsController::class, 'index']);
+
+        // Questionnaire Set Management (Admin only)
+        Route::prefix('questionnaire-sets')->name('questionnaire-sets.')->group(function () {
+            Route::get('/', [QuestionnaireSetController::class, 'index'])->name('index');
+            Route::post('/', [QuestionnaireSetController::class, 'store'])->name('store');
+            Route::put('/{set}', [QuestionnaireSetController::class, 'update'])->name('update');
+            Route::delete('/{set}', [QuestionnaireSetController::class, 'destroy'])->name('destroy');
+            Route::get('/{set}/statistics', [QuestionnaireSetController::class, 'statistics'])->name('statistics');
+            Route::post('/{set}/duplicate', [QuestionnaireSetController::class, 'duplicate'])->name('duplicate');
+            Route::post('/{set}/add-questions', [QuestionnaireSetController::class, 'addQuestions'])->name('add-questions');
+            Route::post('/{set}/remove-questions', [QuestionnaireSetController::class, 'removeQuestions'])->name('remove-questions');
+            Route::patch('/{set}/archive', [QuestionnaireSetController::class, 'archive'])->name('archive');
+            Route::patch('/{set}/restore', [QuestionnaireSetController::class, 'restore'])->name('restore');
+        });
 
         // Admin-only audit question operations
         Route::post('/audit-questions', [AuditQuestionController::class, 'store']);

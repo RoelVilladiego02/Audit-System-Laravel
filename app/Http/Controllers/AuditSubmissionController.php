@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\AuditSubmission;
 use App\Models\AuditAnswer;
 use App\Models\AuditQuestion;
+use App\Models\AuditQuestionnaireSet;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -21,18 +22,48 @@ class AuditSubmissionController extends Controller
         try {
             $validated = $request->validate([
                 'title' => 'required|string|max:255',
+                'questionnaire_set_id' => 'nullable|integer|exists:audit_questionnaire_sets,id',
                 'answers' => 'required|array|min:1',
                 'answers.*.audit_question_id' => 'required|integer|exists:audit_questions,id',
                 'answers.*.answer' => 'required|string',
-                'answers.*.custom_answer' => 'nullable|string|max:1000', // Add custom answer validation
+                'answers.*.custom_answer' => 'nullable|string|max:1000',
                 'answers.*.is_custom_answer' => 'nullable|boolean',
             ]);
 
             return DB::transaction(function () use ($validated, $request) {
+                $setId = $validated['questionnaire_set_id'] ?? null;
+
+                // If a set is specified, validate that all questions belong to that set
+                if ($setId) {
+                    $set = AuditQuestionnaireSet::find($setId);
+                    if (!$set) {
+                        throw ValidationException::withMessages([
+                            'questionnaire_set_id' => 'The selected questionnaire set does not exist.'
+                        ]);
+                    }
+
+                    // Validate all questions belong to this set
+                    $questionIds = array_map(fn($a) => $a['audit_question_id'], $validated['answers']);
+                    $invalidQuestions = AuditQuestion::whereIn('id', $questionIds)
+                        ->where(function ($q) use ($setId) {
+                            $q->where('questionnaire_set_id', '!=', $setId)
+                              ->orWhereNull('questionnaire_set_id');
+                        })
+                        ->pluck('id')
+                        ->toArray();
+
+                    if (!empty($invalidQuestions)) {
+                        throw ValidationException::withMessages([
+                            'answers' => 'Some questions do not belong to the selected questionnaire set.'
+                        ]);
+                    }
+                }
+
                 // Create submission with initial status
                 $submission = AuditSubmission::create([
                     'user_id' => (int) $request->user()->id,
                     'title' => $validated['title'],
+                    'questionnaire_set_id' => $setId,
                     'status' => 'submitted',
                 ]);
 

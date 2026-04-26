@@ -35,6 +35,7 @@ class DatabaseSeeder extends Seeder
             
             // Then create core data
             AuditQuestionSeeder::class,
+            QuestionnaireSetSeeder::class,
             // AuditAnswerSeeder::class,
             
             // Test scenarios for risk calculation validation

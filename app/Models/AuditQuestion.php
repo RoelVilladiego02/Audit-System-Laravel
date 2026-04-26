@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class AuditQuestion extends Model
@@ -18,11 +19,13 @@ class AuditQuestion extends Model
         'possible_answers',
         'risk_criteria',
         'possible_recommendation',
+        'questionnaire_set_id',
     ];
 
     protected $casts = [
         'id' => 'integer',
         'category' => 'string',
+        'questionnaire_set_id' => 'integer',
         'possible_answers' => 'array',
         'risk_criteria' => 'array',
         'possible_recommendation' => 'string',
@@ -43,6 +46,11 @@ class AuditQuestion extends Model
     public function answers(): HasMany
     {
         return $this->hasMany(AuditAnswer::class, 'audit_question_id');
+    }
+
+    public function questionnaireSet(): BelongsTo
+    {
+        return $this->belongsTo(AuditQuestionnaireSet::class, 'questionnaire_set_id');
     }
 
     public function scopeActive($query)

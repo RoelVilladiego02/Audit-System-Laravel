@@ -25,12 +25,14 @@ class AuditSubmission extends Model
         'reviewed_by',
         'reviewed_at',
         'admin_summary',
+        'questionnaire_set_id',
     ];
 
     protected $casts = [
         'id' => 'integer',
         'user_id' => 'integer',
         'reviewed_by' => 'integer',
+        'questionnaire_set_id' => 'integer',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'reviewed_at' => 'datetime',
@@ -49,6 +51,11 @@ class AuditSubmission extends Model
     public function reviewer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reviewed_by');
+    }
+
+    public function questionnaireSet(): BelongsTo
+    {
+        return $this->belongsTo(AuditQuestionnaireSet::class, 'questionnaire_set_id');
     }
 
     // Get answers pending admin review
