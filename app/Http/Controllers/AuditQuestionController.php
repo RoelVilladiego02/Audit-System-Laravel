@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\AuditQuestion;
+use App\Models\AuditQuestionnaireSet;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Validation\ValidationException;
@@ -28,12 +29,13 @@ class AuditQuestionController extends Controller
     }
 
     /**
-     * Store a newly created audit question.
+     * Store a newly created audit question within a questionnaire set.
      */
     public function store(Request $request): JsonResponse
     {
         try {
             $validated = $request->validate([
+                'questionnaire_set_id' => 'required|integer|exists:audit_questionnaire_sets,id',
                 'question' => 'required|string|max:1000',
                 'description' => 'nullable|string|max:2000',
                 'category' => 'required|string|max:255',
@@ -49,6 +51,14 @@ class AuditQuestionController extends Controller
                 'possible_recommendation' => 'nullable|string|max:2000',
             ]);
 
+            // Validate that the set exists and is not archived
+            $set = \App\Models\AuditQuestionnaireSet::find($validated['questionnaire_set_id']);
+            if (!$set || $set->status === 'archived') {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'questionnaire_set_id' => 'The selected questionnaire set does not exist or is archived.'
+                ]);
+            }
+
             // Ensure unique possible answers
             $validated['possible_answers'] = array_unique($validated['possible_answers']);
 
@@ -58,7 +68,7 @@ class AuditQuestionController extends Controller
             $question = AuditQuestion::create($validated);
             
             return response()->json([
-                'message' => 'Question created successfully.',
+                'message' => 'Question created successfully in questionnaire set.',
                 'data' => $question
             ], 201);
         } catch (ValidationException $e) {

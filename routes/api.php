@@ -59,11 +59,13 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('/{set}/remove-questions', [QuestionnaireSetController::class, 'removeQuestions'])->name('remove-questions');
             Route::patch('/{set}/archive', [QuestionnaireSetController::class, 'archive'])->name('archive');
             Route::patch('/{set}/restore', [QuestionnaireSetController::class, 'restore'])->name('restore');
+            
+            // Nested: Questions within a questionnaire set
+            Route::post('/{set}/questions', [AuditQuestionController::class, 'store'])->name('questions.store');
+            Route::put('/{set}/questions/{auditQuestion}', [AuditQuestionController::class, 'update'])->name('questions.update');
         });
 
-        // Admin-only audit question operations
-        Route::post('/audit-questions', [AuditQuestionController::class, 'store']);
-        Route::put('/audit-questions/{auditQuestion}', [AuditQuestionController::class, 'update']);
+        // Admin-only audit question operations (backward compatibility & utilities)
         Route::delete('/audit-questions/{auditQuestion}', [AuditQuestionController::class, 'destroy']);
         Route::get('/audit-questions-statistics', [AuditQuestionController::class, 'statistics']);
         Route::get('/audit-questions/archived', [AuditQuestionController::class, 'archived']);

@@ -11,6 +11,7 @@ class QuestionnaireSetSeeder extends Seeder
 {
     /**
      * Run the database seeds.
+     * This seeder should run AFTER AuditQuestionSeeder to migrate existing questions to sets.
      */
     public function run(): void
     {
@@ -22,41 +23,50 @@ class QuestionnaireSetSeeder extends Seeder
             return;
         }
 
-        // Create default questionnaire set with all existing questions
-        $defaultSet = AuditQuestionnaireSet::create([
-            'name' => 'Default Audit Set',
-            'description' => 'Comprehensive audit questionnaire covering inventory management, configuration management, security protocols, and access controls.',
-            'status' => 'active',
-            'created_by' => $admin->id,
-            'updated_by' => $admin->id,
-        ]);
+        // Create default questionnaire set if not exists
+        $defaultSet = AuditQuestionnaireSet::firstOrCreate(
+            ['name' => 'Default Audit Set'],
+            [
+                'description' => 'Comprehensive audit questionnaire covering inventory management, configuration management, security protocols, and access controls.',
+                'status' => 'active',
+                'created_by' => $admin->id,
+                'updated_by' => $admin->id,
+            ]
+        );
 
-        // Associate all active questions with the default set
-        $questionsUpdated = AuditQuestion::where('questionnaire_set_id', null)
+        // Migrate all existing questions without a set to the default set
+        $migratedCount = AuditQuestion::whereNull('questionnaire_set_id')
             ->whereNull('deleted_at')
             ->update(['questionnaire_set_id' => $defaultSet->id]);
 
-        $this->command->info("Created 'Default Audit Set' with {$questionsUpdated} questions.");
+        if ($migratedCount > 0) {
+            $this->command->info("Migrated {$migratedCount} existing questions to 'Default Audit Set'.");
+        }
 
-        // Create additional questionnaire sets by category
+        $questionCount = $defaultSet->questions()->count();
+        $this->command->info("Default Audit Set now contains {$questionCount} questions.");
+
+        // Create additional questionnaire sets by category (draft status for admin to activate)
         $categories = AuditQuestion::where('questionnaire_set_id', $defaultSet->id)
             ->distinct('category')
             ->pluck('category');
 
         foreach ($categories as $category) {
-            $categorySet = AuditQuestionnaireSet::create([
-                'name' => "{$category} Questionnaire",
-                'description' => "Focused audit questionnaire covering {$category} topics.",
-                'status' => 'draft',
-                'created_by' => $admin->id,
-                'updated_by' => $admin->id,
-            ]);
+            $categorySet = AuditQuestionnaireSet::firstOrCreate(
+                ['name' => "{$category} Questionnaire"],
+                [
+                    'description' => "Focused audit questionnaire covering {$category} topics. Duplicate from Default Audit Set.",
+                    'status' => 'draft',
+                    'created_by' => $admin->id,
+                    'updated_by' => $admin->id,
+                ]
+            );
 
-            $catQuestionCount = AuditQuestion::where('category', $category)
-                ->where('questionnaire_set_id', $defaultSet->id)
-                ->count();
-
-            $this->command->info("Created '{$category} Questionnaire' with {$catQuestionCount} questions (in draft status).");
+            // Don't actually associate questions - these are templates
+            // Admins will manage these sets manually
+            $this->command->info("Created '{$category} Questionnaire' template (draft status).");
         }
+
+        $this->command->info('Questionnaire sets initialization complete!');
     }
 }
