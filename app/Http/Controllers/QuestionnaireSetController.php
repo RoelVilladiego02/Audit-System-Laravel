@@ -112,7 +112,7 @@ class QuestionnaireSetController extends Controller
     {
         try {
             $data = $set->load([
-                'questions:id,question,description,category,questionnaire_set_id',
+                'questions:id,question,description,category,questionnaire_set_id,possible_answers,risk_criteria,possible_recommendation',
                 'creator:id,name,email',
                 'updater:id,name,email'
             ])->toArray();
