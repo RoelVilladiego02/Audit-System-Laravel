@@ -852,6 +852,7 @@ class AuditSubmissionController extends Controller
         try {
             $validated = $request->validate([
                 'title' => 'required|string|max:255',
+                'questionnaire_set_id' => 'nullable|integer|exists:audit_questionnaire_sets,id',
                 'answers' => 'nullable|array',
                 'answers.*.audit_question_id' => 'required_with:answers|integer|exists:audit_questions,id',
                 'answers.*.answer' => 'required_with:answers|string',
@@ -860,10 +861,48 @@ class AuditSubmissionController extends Controller
             ]);
 
             return DB::transaction(function () use ($validated, $request) {
+                $setId = $validated['questionnaire_set_id'] ?? null;
+
+                // If a set is specified, validate that all questions belong to that set
+                if ($setId) {
+                    $set = AuditQuestionnaireSet::find($setId);
+                    if (!$set) {
+                        throw ValidationException::withMessages([
+                            'questionnaire_set_id' => 'The selected questionnaire set does not exist.'
+                        ]);
+                    }
+
+                    // Validate all questions belong to this set
+                    if (!empty($validated['answers'])) {
+                        $questionIds = array_map(fn($a) => $a['audit_question_id'], $validated['answers']);
+                        $invalidQuestions = AuditQuestion::whereIn('id', $questionIds)
+                            ->where(function ($q) use ($setId) {
+                                $q->where('questionnaire_set_id', '!=', $setId)
+                                  ->orWhereNull('questionnaire_set_id');
+                            })
+                            ->pluck('id')
+                            ->toArray();
+
+                        if (!empty($invalidQuestions)) {
+                            throw ValidationException::withMessages([
+                                'answers' => 'Some questions do not belong to the selected questionnaire set.'
+                            ]);
+                        }
+                    }
+                }
+
+                // Get questionnaire set name if provided
+                $setName = '';
+                if ($setId) {
+                    $set = AuditQuestionnaireSet::find($setId);
+                    $setName = $set ? ' (' . $set->name . ')' : '';
+                }
+
                 // Create submission with draft status
                 $submission = AuditSubmission::create([
                     'user_id' => (int) $request->user()->id,
-                    'title' => $validated['title'],
+                    'title' => $validated['title'] . $setName,
+                    'questionnaire_set_id' => $setId,
                     'status' => 'draft',
                 ]);
 
