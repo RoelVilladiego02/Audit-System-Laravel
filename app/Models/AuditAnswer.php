@@ -215,4 +215,48 @@ class AuditAnswer extends Model
               });
         });
     }
+
+    /**
+     * Scope to get custom answers only
+     */
+    public function scopeCustomAnswers($query)
+    {
+        return $query->where('is_custom_answer', true);
+    }
+
+    /**
+     * Scope to get non-custom answers only
+     */
+    public function scopeNonCustomAnswers($query)
+    {
+        return $query->where('is_custom_answer', false);
+    }
+
+    /**
+     * Scope to get medium risk answers
+     */
+    public function scopeMediumRisk($query)
+    {
+        return $query->where(function($q) {
+            $q->where('admin_risk_level', 'medium')
+              ->orWhere(function($subQ) {
+                  $subQ->whereNull('admin_risk_level')
+                       ->where('system_risk_level', 'medium');
+              });
+        });
+    }
+
+    /**
+     * Scope to get low risk answers
+     */
+    public function scopeLowRisk($query)
+    {
+        return $query->where(function($q) {
+            $q->where('admin_risk_level', 'low')
+              ->orWhere(function($subQ) {
+                  $subQ->whereNull('admin_risk_level')
+                       ->where('system_risk_level', 'low');
+              });
+        });
+    }
 }

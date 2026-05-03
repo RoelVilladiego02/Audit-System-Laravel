@@ -39,6 +39,8 @@ Route::middleware('auth:sanctum')->group(function () {
     // Questionnaire set routes - accessible to authenticated users
     Route::get('/questionnaire-sets/active', [QuestionnaireSetController::class, 'activeOnly']);
     Route::get('/questionnaire-sets/{set}', [QuestionnaireSetController::class, 'show']);
+    Route::get('/questionnaire-sets/{set}/questions/by-category', [AuditQuestionController::class, 'getByCategory']);
+    Route::get('/questionnaire-sets/{set}/categories', [AuditQuestionController::class, 'getCategories']);
 
     // Admin routes with optimized middleware
     Route::middleware(['role:admin'])->group(function () {

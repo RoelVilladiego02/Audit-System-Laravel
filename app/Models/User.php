@@ -68,6 +68,22 @@ class User extends Authenticatable
         return $this->hasMany(AuditAnswer::class, 'reviewed_by');
     }
 
+    /**
+     * Questionnaire sets created by this user
+     */
+    public function createdQuestionnaireSets()
+    {
+        return $this->hasMany(AuditQuestionnaireSet::class, 'created_by');
+    }
+
+    /**
+     * Questionnaire sets updated by this user
+     */
+    public function updatedQuestionnaireSets()
+    {
+        return $this->hasMany(AuditQuestionnaireSet::class, 'updated_by');
+    }
+
     // Admin dashboard methods
     public function getPendingAuditReviewsCount(): int
     {

@@ -320,4 +320,55 @@ class AuditQuestionController extends Controller
             }
         }
     }
+
+    /**
+     * Get questions grouped by category for a questionnaire set.
+     */
+    public function getByCategory(Request $request, AuditQuestionnaireSet $set): JsonResponse
+    {
+        try {
+            $category = $request->query('category');
+            
+            $query = $set->questions()->active();
+            
+            if ($category) {
+                $query->where('category', $category);
+            }
+            
+            $grouped = $query
+                ->orderBy('category')
+                ->orderBy('id')
+                ->get()
+                ->groupBy('category');
+            
+            return response()->json($grouped);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to retrieve questions.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get all unique categories in a questionnaire set.
+     */
+    public function getCategories(AuditQuestionnaireSet $set): JsonResponse
+    {
+        try {
+            $categories = $set->questions()
+                ->active()
+                ->distinct('category')
+                ->pluck('category')
+                ->sort()
+                ->values();
+            
+            return response()->json($categories);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to retrieve categories.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
 }

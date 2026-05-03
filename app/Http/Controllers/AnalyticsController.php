@@ -164,6 +164,9 @@ class AnalyticsController extends Controller
             ->where('created_at', '>=', $startDate);
 
         $conversionStats = $this->getAuditToVulnerabilityConversion($auditQuery);
+        
+        // Get questionnaire set breakdown
+        $questionnaireSetStats = $this->getQuestionnaireSetBreakdown($startDate, $userId);
 
         return [
             'type' => 'combined',
@@ -174,7 +177,8 @@ class AnalyticsController extends Controller
                 'vulnerabilitySubmissions' => $vulnData['totalSubmissions'],
                 'auditSubmissions' => $auditData['totalSubmissions'],
             ],
-            'conversionStats' => $conversionStats
+            'conversionStats' => $conversionStats,
+            'by_questionnaire_set' => $questionnaireSetStats
         ];
     }
 
@@ -637,5 +641,31 @@ class AnalyticsController extends Controller
             'conversion_rate' => $totalAudits > 0 ? round(($auditsWithVulns / $totalAudits) * 100, 1) : 0,
             'total_vulnerabilities_created' => (int) $totalVulnsCreated
         ];
+    }
+
+    /**
+     * Get analytics breakdown by questionnaire set.
+     */
+    private function getQuestionnaireSetBreakdown(Carbon $startDate, ?int $userId = null): array
+    {
+        $query = AuditSubmission::query()
+            ->where('created_at', '>=', $startDate)
+            ->with('questionnaireSet:id,name')
+            ->select('questionnaire_set_id', DB::raw('count(*) as submission_count'), 
+                     DB::raw("ROUND(AVG(CASE WHEN COALESCE(admin_overall_risk, system_overall_risk) = 'high' THEN 1 ELSE 0 END) * 100, 2) as high_risk_percentage"))
+            ->groupBy('questionnaire_set_id');
+        
+        if ($userId) {
+            $query->where('user_id', $userId);
+        }
+
+        return $query->get()->map(function($item) {
+            return [
+                'set_id' => $item->questionnaire_set_id,
+                'set_name' => $item->questionnaireSet->name ?? 'Unknown Set',
+                'submission_count' => (int) $item->submission_count,
+                'high_risk_percentage' => (float) $item->high_risk_percentage,
+            ];
+        })->toArray();
     }
 }

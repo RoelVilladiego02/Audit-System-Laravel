@@ -804,6 +804,88 @@ class AuditSubmissionController extends Controller
     }
 
     /**
+     * Validate that all questions belong to a questionnaire set.
+     * 
+     * @param int $setId
+     * @param array $questionIds
+     * @return void
+     * @throws ValidationException
+     */
+    private function validateQuestionsBelongToSet(int $setId, array $questionIds): void
+    {
+        if (empty($questionIds)) {
+            return;
+        }
+
+        // Check that questionnaire set exists
+        $set = AuditQuestionnaireSet::find($setId);
+        if (!$set) {
+            throw ValidationException::withMessages([
+                'questionnaire_set_id' => 'The selected questionnaire set does not exist.'
+            ]);
+        }
+
+        // Find questions that don't belong to the set
+        $invalidQuestions = AuditQuestion::whereIn('id', $questionIds)
+            ->where(function ($q) use ($setId) {
+                $q->where('questionnaire_set_id', '!=', $setId)
+                  ->orWhereNull('questionnaire_set_id');
+            })
+            ->pluck('id')
+            ->toArray();
+
+        if (!empty($invalidQuestions)) {
+            throw ValidationException::withMessages([
+                'answers' => "Questions with IDs [" . implode(', ', $invalidQuestions) . "] do not belong to the selected questionnaire set."
+            ]);
+        }
+    }
+
+    /**
+     * Validate an individual answer against question constraints.
+     * 
+     * @param AuditQuestion $question
+     * @param string $answer
+     * @param string|null $customAnswer
+     * @return array ['isCustom' => bool, 'finalAnswer' => string]
+     * @throws ValidationException
+     */
+    private function validateAndProcessAnswer(AuditQuestion $question, string $answer, ?string $customAnswer = null): array
+    {
+        $isCustomAnswer = false;
+        $finalAnswer = $answer;
+
+        if ($answer === 'Others') {
+            if (!$question->allowsCustomAnswers()) {
+                throw ValidationException::withMessages([
+                    'answers' => "Custom answers are not allowed for question ID {$question->id}."
+                ]);
+            }
+
+            if (empty($customAnswer)) {
+                throw ValidationException::withMessages([
+                    'answers' => "A custom answer is required for question ID {$question->id} when selecting 'Others'."
+                ]);
+            }
+
+            $isCustomAnswer = true;
+            $finalAnswer = trim($customAnswer);
+        } else {
+            // Validate regular answer
+            if (!$question->isValidAnswer($answer)) {
+                throw ValidationException::withMessages([
+                    'answers' => "Invalid answer '{$answer}' for question ID {$question->id}. Valid options are: " . $question->getPossibleAnswersStringAttribute()
+                ]);
+            }
+        }
+
+        return [
+            'isCustom' => $isCustomAnswer,
+            'finalAnswer' => $finalAnswer
+        ];
+    }
+
+    /**
      * Delete an audit submission.
      * Users can only delete their own submissions, while admins can delete any.
      */
