@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\User;
 use App\Models\AuditSubmission;
 use App\Models\AuditQuestion;
+use App\Models\AuditQuestionnaireSet;
 use App\Models\AuditAnswer;
 use Illuminate\Database\Seeder;
 
@@ -15,28 +16,21 @@ class AuditSubmissionSeeder extends Seeder
         // Get all regular users and admin user
         $users = User::where('role', 'user')->get();
         $admin = User::where('role', 'admin')->first();
-        $questions = AuditQuestion::all();
+        $questionnaireSets = AuditQuestionnaireSet::all();
         $riskLevels = ['low', 'medium', 'high'];
         $statuses = ['draft', 'submitted', 'under_review', 'completed'];
 
-        $auditTitles = [
-            'Quarterly Security Assessment',
-            'Annual Compliance Review',
-            'Network Infrastructure Audit',
-            'Application Security Review',
-            'Data Protection Audit',
-            'Cloud Security Assessment',
-            'Access Control Review',
-            'Security Policy Compliance Check',
-            'Incident Response Assessment',
-            'Third-Party Vendor Review',
-            'Employee Security Training Audit',
-            'Physical Security Assessment',
-            'Business Continuity Plan Review'
-        ];
-
         // Create 100 sample audit submissions
         for ($i = 0; $i < 100; $i++) {
+            // Randomly assign to one of the questionnaire sets
+            $questionnaireSet = $questionnaireSets->random();
+            $questions = $questionnaireSet->questions;
+
+            if ($questions->isEmpty()) {
+                $this->command->warn("No questions found for questionnaire set: {$questionnaireSet->name}");
+                continue;
+            }
+
             $createdAt = fake()->dateTimeBetween('-1 year', 'now');
             // Weight the statuses to have more completed ones
             $status = fake()->randomElement([
@@ -51,6 +45,7 @@ class AuditSubmissionSeeder extends Seeder
             $adminRisk = $status === 'completed' ? $riskLevels[array_rand($riskLevels)] : null;
 
             $submission = AuditSubmission::create([
+                'questionnaire_set_id' => $questionnaireSet->id,
                 'user_id' => (int)$users->random()->id,
                 'title' => 'Audit Report',
                 'system_overall_risk' => $systemRisk,
@@ -63,7 +58,7 @@ class AuditSubmissionSeeder extends Seeder
                 'updated_at' => $reviewedAt ?? $createdAt,
             ]);
 
-            // Create answers for each of the 24 questions
+            // Create answers for each question in this questionnaire set
             foreach ($questions as $question) {
                 $possibleAnswers = is_string($question->possible_answers) 
                     ? json_decode($question->possible_answers, true) 

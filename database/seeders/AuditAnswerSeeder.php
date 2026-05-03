@@ -13,11 +13,17 @@ class AuditAnswerSeeder extends Seeder
     public function run(): void
     {
         $admin = User::where('role', 'admin')->first();
-        $questions = AuditQuestion::all();
-        $submissions = AuditSubmission::all();
+        $submissions = AuditSubmission::with('questionnaireSet.questions')->get();
         $riskLevels = ['low', 'medium', 'high'];
 
         foreach ($submissions as $submission) {
+            // Get only questions that belong to this submission's questionnaire set
+            $questions = $submission->questionnaireSet->questions;
+            
+            if ($questions->isEmpty()) {
+                continue;
+            }
+
             foreach ($questions as $question) {
                 $possibleAnswers = json_decode($question->possible_answers, true);
                 $isCustomAnswer = false;
