@@ -3,12 +3,55 @@
 namespace Database\Seeders;
 
 use App\Models\AuditQuestion;
+use App\Models\AuditQuestionnaireSet;
+use App\Models\User;
 use Illuminate\Database\Seeder;
 
 class AuditQuestionSeeder extends Seeder
 {
     public function run(): void
     {
+        // Get or create admin user
+        $admin = User::where('role', 'admin')->first() ?? User::first();
+        
+        if (!$admin) {
+            $this->command->warn('No users found in database. Please run UserSeeder first.');
+            return;
+        }
+
+        // Create the 3 questionnaire sets first
+        $sets = [];
+        $setConfigs = [
+            [
+                'name' => 'ISO 27001',
+                'description' => 'Comprehensive audit questionnaire covering ISO 27001 security controls including inventory management, configuration management, security measures, and access controls.',
+                'status' => 'active',
+            ],
+            [
+                'name' => 'NIST',
+                'description' => 'Audit questionnaire based on NIST frameworks including NIST SP 800-207 (Zero Trust Architecture), NIST SP 800-53 (Security Controls), NIST SP 800-171 (Cybersecurity), and NIST SP 800-115 (Technical Assessment).',
+                'status' => 'active',
+            ],
+            [
+                'name' => 'PCI',
+                'description' => 'Audit questionnaire for PCI DSS compliance covering network security, data protection, vulnerability management, access control, and monitoring requirements.',
+                'status' => 'active',
+            ],
+        ];
+
+        foreach ($setConfigs as $config) {
+            $set = AuditQuestionnaireSet::firstOrCreate(
+                ['name' => $config['name']],
+                [
+                    'description' => $config['description'],
+                    'status' => $config['status'],
+                    'created_by' => $admin->id,
+                    'updated_by' => $admin->id,
+                ]
+            );
+            $sets[$config['name']] = $set->id;
+        }
+
         // ISO 27001 Questions (10)
         $iso27001Questions = [
             [
@@ -268,12 +311,14 @@ class AuditQuestionSeeder extends Seeder
             'PCI' => $pciQuestions,
         ];
 
-        // Store in cache for QuestionnaireSetSeeder to use
-        \Illuminate\Support\Facades\Cache::put('audit_question_sets', $questionSets, 3600);
-
-        // Seed questions without set association (will be assigned in QuestionnaireSetSeeder)
+        // Seed questions and assign to their respective sets
         foreach ($questionSets as $setName => $questions) {
+            $setId = $sets[$setName];
+            
             foreach ($questions as $questionData) {
+                // Set the questionnaire_set_id for this question
+                $questionData['questionnaire_set_id'] = $setId;
+                
                 AuditQuestion::updateOrCreate(
                     ['question' => $questionData['question']],
                     $questionData
@@ -281,6 +326,6 @@ class AuditQuestionSeeder extends Seeder
             }
         }
 
-        $this->command->info('30 audit questions prepared for seeding into 3 questionnaire sets (ISO 27001, NIST, PCI).');
+        $this->command->info('30 audit questions seeded successfully across 3 questionnaire sets.');
     }
 }

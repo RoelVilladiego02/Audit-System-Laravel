@@ -33,9 +33,9 @@ class DatabaseSeeder extends Seeder
             AdminSeeder::class,
             UserSeeder::class,
             
-            // Then create core data
+            // Then create core data (AuditQuestionSeeder now creates both sets and questions)
             AuditQuestionSeeder::class,
-            QuestionnaireSetSeeder::class,
+            // QuestionnaireSetSeeder::class, // No longer needed - sets created in AuditQuestionSeeder
             // AuditAnswerSeeder::class,
             
             // Test scenarios for risk calculation validation
