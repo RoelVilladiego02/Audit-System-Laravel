@@ -59,10 +59,17 @@ class AuditSubmissionController extends Controller
                     }
                 }
 
-                // Create submission with initial status
+                // Get questionnaire set name if provided
+                $setName = '';
+                if ($setId) {
+                    $set = AuditQuestionnaireSet::find($setId);
+                    $setName = $set ? ' (' . $set->name . ')' : '';
+                }
+
+                // Create submission with initial status and set name in title
                 $submission = AuditSubmission::create([
                     'user_id' => (int) $request->user()->id,
-                    'title' => $validated['title'],
+                    'title' => $validated['title'] . $setName,
                     'questionnaire_set_id' => $setId,
                     'status' => 'submitted',
                 ]);
