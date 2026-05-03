@@ -3,378 +3,284 @@
 namespace Database\Seeders;
 
 use App\Models\AuditQuestion;
-use App\Models\AuditQuestionnaireSet;
-use App\Models\User;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\DB;
 
 class AuditQuestionSeeder extends Seeder
 {
     public function run(): void
     {
-        // Ensure the default questionnaire set exists
-        // This handles the case where the migration couldn't create it
-        // (e.g., no admin user existed yet during migration)
-        $admin = User::where('role', 'admin')->first();
-        
-        if ($admin) {
-            $defaultSet = AuditQuestionnaireSet::firstOrCreate(
-                ['name' => 'Default Audit Set'],
-                [
-                    'description' => 'Default questionnaire set',
-                    'status' => 'active',
-                    'created_by' => $admin->id,
-                    'updated_by' => $admin->id,
-                ]
-            );
-            $defaultSetId = $defaultSet->id;
-        } else {
-            // Fallback: get the first questionnaire set ID from the database
-            // or create one without a creator
-            $defaultSetId = DB::table('audit_questionnaire_sets')->value('id');
-            if (!$defaultSetId) {
-                DB::table('audit_questionnaire_sets')->insert([
-                    'name' => 'Default Audit Set',
-                    'description' => 'Default questionnaire set',
-                    'status' => 'active',
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
-                $defaultSetId = DB::table('audit_questionnaire_sets')->value('id');
-            }
-        }
-
-        $questions = [
+        // ISO 27001 Questions (10)
+        $iso27001Questions = [
             [
                 'question' => 'Has a detailed inventory of all physical devices been created?',
-                'description' => 'Checks if the organization maintains a comprehensive inventory of all physical devices, including servers, workstations, and peripherals, to ensure asset management and tracking.',
+                'description' => 'Verify if the organization maintains a comprehensive inventory of all physical devices.',
                 'category' => 'Inventory Management',
                 'possible_answers' => ['Yes', 'No'],
-                'risk_criteria' => [
-                    'high' => ['No'],
-                    'low' => ['Yes']
-                ],
-                'possible_recommendation' => "Establish an Asset Inventory Framework.\nKey Components:\n- Align with ISO 27001:2022 Annex A.8 Asset Management\n- Develop a comprehensive asset management policy\n- Define asset categories (hardware, software, data, etc.)\n- Assign responsibility for asset management\n- Implement asset tracking tools and procedures",
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
-            [
-                'question' => 'Are model numbers, serial numbers, and locations for future reference recorded?',
-                'description' => 'Evaluates whether device details such as model numbers, serial numbers, and physical locations are documented for future reference and tracking.',
-                'category' => 'Inventory Management',
-                'possible_answers' => ['Yes', 'No'],
-                'risk_criteria' => [
-                    'high' => ['No'],
-                    'low' => ['Yes']
-                ],
-                'possible_recommendation' => "Establish an Asset Inventory Framework.\nKey Components:\n- Align with ISO 27001:2022 Annex A.8 Asset Management\n- Develop a comprehensive asset management policy\n- Define asset categories (hardware, software, data, etc.)\n- Assign responsibility for asset management\n- Implement asset tracking tools and procedures",
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
-            [
-                'question' => 'Have the conditions of each device been assessed, and any physical damage or wear noted?',
-                'description' => 'Assesses whether the organization regularly evaluates the physical and functional condition of devices, noting any damage, wear, or operational issues.',
-                'category' => 'Inventory Management',
-                'possible_answers' => ['Yes', 'No'],
-                'risk_criteria' => [
-                    'high' => ['No'],
-                    'low' => ['Yes']
-                ],
-                'possible_recommendation' => "Align with ISO 27002:2022 Control 7.13.\nInclude: Physical condition (scratches, dents, wear), functional status, battery health, screen condition, port and connector integrity, and internal components (if accessible).",
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
-            [
-                'question' => 'Has the current network setup, including configurations for routers, switches, and firewalls, been documented for configuration management?',
-                'description' => 'Checks if the organization maintains up-to-date documentation of network configurations for routers, switches, and firewalls to support configuration management.',
-                'category' => 'Configuration Management',
-                'possible_answers' => ['Yes', 'No'],
-                'risk_criteria' => [
-                    'high' => ['No'],
-                    'low' => ['Yes']
-                ],
-                'possible_recommendation' => "Establish a Network Documentation Framework.\nKey Components:\n- Align with ISO 27001:2022 Annex A 8.9 Technological Controls\n- Develop a standardized documentation policy\n- Define documentation scope and objectives\n- Assign responsibility for documentation maintenance\n- Implement version control for all documents",
-                'created_at' => now(),
-                'updated_at' => now(),
+                'risk_criteria' => ['high' => ['No'], 'low' => ['Yes']],
+                'possible_recommendation' => 'Establish comprehensive device inventory tracking with model numbers, serial numbers, and locations.',
             ],
             [
                 'question' => 'Are network device configurations regularly backed up?',
-                'description' => 'Evaluates whether the organization has a policy and procedures for regularly backing up network device configurations and storing them securely.',
+                'description' => 'Verify that network device configurations are regularly backed up and stored securely.',
                 'category' => 'Configuration Management',
                 'possible_answers' => ['Yes', 'No'],
-                'risk_criteria' => [
-                    'high' => ['No'],
-                    'low' => ['Yes']
-                ],
-                'possible_recommendation' => "Establish Configuration Backup Policy.\nKey Components:\n- Align with ISO 27001:2022 Annex A 8.13 Technological Controls\n- Define backup frequency and retention\n- Specify backup storage locations\n- Establish verification procedures\n- Document recovery processes",
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
-            [
-                'question' => 'Do network configurations adhere to industry best practices for security and performance?',
-                'description' => 'Assesses whether network configurations are regularly reviewed and updated to align with industry best practices for security and performance.',
-                'category' => 'Configuration Management',
-                'possible_answers' => ['Yes', 'No'],
-                'risk_criteria' => [
-                    'high' => ['No'],
-                    'low' => ['Yes']
-                ],
-                'possible_recommendation' => "Network Configuration Management Framework.\nEstablish: Documented configuration standards, change management procedures, regular configuration reviews, and performance monitoring systems.",
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
-            [
-                'question' => 'Has the current data load on the network been assessed to ensure there are no bottlenecks?',
-                'description' => 'Checks if the organization conducts regular assessments of network data load to identify and resolve bottlenecks.',
-                'category' => 'Configuration Management',
-                'possible_answers' => ['Yes', 'No'],
-                'risk_criteria' => [
-                    'high' => ['No'],
-                    'low' => ['Yes']
-                ],
-                'possible_recommendation' => "Baseline Performance Assessment.\nImplement: Establish baseline network performance metrics, conduct initial network load assessment, document normal traffic patterns, identify peak usage periods, and set performance benchmarks.",
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
-            [
-                'question' => 'Has the effectiveness of network security measures, such as firewalls, intrusion detection systems, and encryption protocols, been reviewed and validated?',
-                'description' => 'Assesses whether the organization regularly reviews and validates the effectiveness of network security measures, including firewalls, IDS, and encryption protocols.',
-                'category' => 'Security Protocols',
-                'possible_answers' => ['Yes', 'No'],
-                'risk_criteria' => [
-                    'high' => ['No'],
-                    'low' => ['Yes']
-                ],
-                'possible_recommendation' => "Comprehensive Security Measure Review.\n- Align in ISO 27001:2022 Annex A.8.20\n- Firewall configuration audits\n- IDS/IPS effectiveness testing\n- Encryption protocol strength assessment\n- Network segmentation validation\n- Access control effectiveness",
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
-            [
-                'question' => 'Have penetration tests been conducted to evaluate the strength of the network against potential attacks?',
-                'description' => 'Evaluate penetration testing practices',
-                'category' => 'Security Protocols',
-                'possible_answers' => ['Yes', 'No'],
-                'risk_criteria' => [
-                    'high' => ['No'],
-                    'low' => ['Yes']
-                ],
-                'possible_recommendation' => "Penetration Testing Program.\n- Engage certified third-party experts\n- Conduct tests quarterly\n- Focus on network, application, and physical security\n- Remediate identified vulnerabilities\n- Retest to ensure issues are resolved",
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
-            [
-                'question' => 'Have security protocols been updated in accordance with new threats and vulnerabilities as they emerge?',
-                'description' => 'Assess updates to security protocols',
-                'category' => 'Security Protocols',
-                'possible_answers' => ['Yes', 'No'],
-                'risk_criteria' => [
-                    'high' => ['No'],
-                    'low' => ['Yes']
-                ],
-                'possible_recommendation' => "Threat Intelligence and Response Plan.\n- Subscribe to threat intelligence feeds\n- Review and update protocols monthly\n- Conduct bi-annual security training for staff\n- Implement an incident response plan",
-                'created_at' => now(),
-                'updated_at' => now(),
+                'risk_criteria' => ['high' => ['No'], 'low' => ['Yes']],
+                'possible_recommendation' => 'Establish configuration backup policy with defined frequency and secure storage locations.',
             ],
             [
                 'question' => 'Have access controls been checked to ensure only authorized personnel can access sensitive data?',
-                'description' => 'Evaluate access control measures for sensitive data',
+                'description' => 'Verify that access controls are properly implemented and limit access to sensitive data.',
                 'category' => 'Access Controls',
                 'possible_answers' => ['Yes', 'No'],
-                'risk_criteria' => [
-                    'high' => ['No'],
-                    'low' => ['Yes']
-                ],
-                'possible_recommendation' => "Access Control Review and Enhancement.\n- Conduct access control audits bi-annually\n- Implement role-based access controls (RBAC)\n- Enforce least privilege access\n- Review and update access controls with every role change",
-                'created_at' => now(),
-                'updated_at' => now(),
+                'risk_criteria' => ['high' => ['No'], 'low' => ['Yes']],
+                'possible_recommendation' => 'Conduct access control audits bi-annually and implement role-based access controls (RBAC).',
             ],
             [
-                'question' => 'Have user access rights been reviewed to align with job roles and responsibilities?',
-                'description' => 'Assess alignment of access rights with roles',
+                'question' => 'Is MFA implemented for all remote network access originating from outside the entity\'s network?',
+                'description' => 'Verify MFA implementation for remote access including vendors and external parties.',
                 'category' => 'Access Controls',
                 'possible_answers' => ['Yes', 'No'],
-                'risk_criteria' => [
-                    'high' => ['No'],
-                    'low' => ['Yes']
-                ],
-                'possible_recommendation' => "User Access Review Policy.\n- Implement quarterly access rights reviews\n- Automate role-based access assignments\n- Require manager approval for access changes\n- Conduct immediate reviews after any security incident",
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
-            [
-                'question' => 'Have accounts of offboarded users been cleared?',
-                'description' => 'Evaluate account management for offboarded users',
-                'category' => 'Access Controls',
-                'possible_answers' => ['Yes', 'No'],
-                'risk_criteria' => [
-                    'high' => ['No'],
-                    'low' => ['Yes']
-                ],
-                'possible_recommendation' => "Offboarding Process Enhancement.\n- Automate account disabling and deletion for offboarded users\n- Conduct exit interviews to recover assets\n- Revoke access to all systems and data immediately upon termination",
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
-            [
-                'question' => 'MFA is implemented for all remote network access originating from outside the entity’s network, including all remote access by vendors and other outside parties and other sensitive systems.',
-                'description' => 'Evaluate MFA implementation for remote access',
-                'category' => 'Access Controls',
-                'possible_answers' => ['Yes', 'No'],
-                'risk_criteria' => [
-                    'high' => ['No'],
-                    'low' => ['Yes']
-                ],
-                'possible_recommendation' => "Multi-Factor Authentication (MFA) Implementation Plan.\n- Enable MFA for all remote access points\n- Include vendor and external party logins\n- Use time-based one-time passwords (TOTPs) or authenticator apps\n- Review and update MFA methods annually",
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
-            [
-                'question' => 'Are access levels modifiable, and are user privileges limited to job function?',
-                'description' => 'Assess modifiability of access levels and privilege limitations',
-                'category' => 'Access Controls',
-                'possible_answers' => ['Yes', 'No'],
-                'risk_criteria' => [
-                    'high' => ['No'],
-                    'low' => ['Yes']
-                ],
-                'possible_recommendation' => "Access Level Management Framework.\n- Implement adjustable access levels via admin tools\n- Regularly review user privileges\n- Limit access to job-specific functions only\n- Provide training on access management for administrators",
-                'created_at' => now(),
-                'updated_at' => now(),
+                'risk_criteria' => ['high' => ['No'], 'low' => ['Yes']],
+                'possible_recommendation' => 'Enable MFA for all remote access points using authenticator apps or hardware tokens.',
             ],
             [
                 'question' => 'Have security measures, including antivirus, antimalware, and firewalls, been confirmed to be activated and up-to-date?',
-                'description' => 'Assess activation and currency of security measures',
+                'description' => 'Verify that all security tools are activated and kept current with latest definitions.',
                 'category' => 'Security Measures',
                 'possible_answers' => ['Yes', 'No'],
-                'risk_criteria' => [
-                    'high' => ['No'],
-                    'low' => ['Yes']
-                ],
-                'possible_recommendation' => "Security Software Management Policy.\n- Activate and update antivirus and antimalware solutions\n- Ensure firewalls are properly configured and active\n- Conduct monthly reviews of security software status\n- Provide user training on security awareness",
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
-            [
-                'question' => 'Have security settings been reviewed to ensure compliance with the organization\'s security policy?',
-                'description' => 'Evaluate compliance of security settings',
-                'category' => 'Security Measures',
-                'possible_answers' => ['Yes', 'No'],
-                'risk_criteria' => [
-                    'high' => ['No'],
-                    'low' => ['Yes']
-                ],
-                'possible_recommendation' => "Security Settings Compliance Review.\n- Conduct bi-annual reviews of security settings\n- Use automated tools for compliance checking\n- Remediate any deviations from the security policy\n- Document and report compliance status to management",
-                'created_at' => now(),
-                'updated_at' => now(),
+                'risk_criteria' => ['high' => ['No'], 'low' => ['Yes']],
+                'possible_recommendation' => 'Implement automated deployment of security software updates and conduct monthly status reviews.',
             ],
             [
                 'question' => 'Have vulnerability scans been conducted to detect potential software security weaknesses?',
-                'description' => 'Assess vulnerability scanning practices',
+                'description' => 'Verify that regular vulnerability scanning is performed to identify security gaps.',
                 'category' => 'Security Measures',
                 'possible_answers' => ['Yes', 'No'],
-                'risk_criteria' => [
-                    'high' => ['No'],
-                    'low' => ['Yes']
-                ],
-                'possible_recommendation' => "Vulnerability Management Program.\n- Conduct automated vulnerability scans monthly\n- Use tools like Nessus or Qualys for scanning\n- Prioritize and remediate vulnerabilities based on risk\n- Retest to ensure vulnerabilities are effectively addressed",
-                'created_at' => now(),
-                'updated_at' => now(),
+                'risk_criteria' => ['high' => ['No'], 'low' => ['Yes']],
+                'possible_recommendation' => 'Conduct automated vulnerability scans monthly using tools like Nessus or Qualys.',
             ],
             [
-                'question' => 'Has a review confirmed that all required documentation, such as policies, procedures, and compliance reports, is complete, up-to-date, and stored securely?',
-                'description' => 'Evaluate completeness and security of documentation',
-                'category' => 'Documentation Review',
+                'question' => 'Have penetration tests been conducted to evaluate the strength of the network against potential attacks?',
+                'description' => 'Verify that penetration testing is performed to validate security posture.',
+                'category' => 'Security Measures',
                 'possible_answers' => ['Yes', 'No'],
-                'risk_criteria' => [
-                    'high' => ['No'],
-                    'low' => ['Yes']
-                ],
-                'possible_recommendation' => "Documentation Management Policy.\n- Implement a centralized documentation repository\n- Ensure all documents are reviewed and updated quarterly\n- Conduct bi-annual audits of documentation completeness\n- Provide training on documentation standards and procedures",
-                'created_at' => now(),
-                'updated_at' => now(),
+                'risk_criteria' => ['high' => ['No'], 'low' => ['Yes']],
+                'possible_recommendation' => 'Engage certified third-party experts for quarterly penetration testing.',
             ],
             [
-                'question' => 'Is documentation easily accessible to authorized personnel, especially in the event of an audit?',
-                'description' => 'Assess accessibility of documentation for audits',
-                'category' => 'Documentation Review',
+                'question' => 'Are access levels modifiable, and are user privileges limited to job function?',
+                'description' => 'Verify that access levels can be adjusted and follow the principle of least privilege.',
+                'category' => 'Access Controls',
                 'possible_answers' => ['Yes', 'No'],
-                'risk_criteria' => [
-                    'high' => ['No'],
-                    'low' => ['Yes']
-                ],
-                'possible_recommendation' => "Documentation Accessibility Enhancement.\n- Implement role-based access controls for documentation\n- Provide secure, remote access to documentation for auditors\n- Regularly test the accessibility of critical documents\n- Review and update access permissions quarterly",
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
-            [
-                'question' => 'Is documentation being regularly updated to reflect any changes in regulations or business operations?',
-                'description' => 'Evaluate currency of documentation',
-                'category' => 'Documentation Review',
-                'possible_answers' => ['Yes', 'No'],
-                'risk_criteria' => [
-                    'high' => ['No'],
-                    'low' => ['Yes']
-                ],
-                'possible_recommendation' => "Regulatory Change Management Process.\n- Monitor regulatory changes impacting the organization\n- Update documentation within one month of regulatory changes\n- Conduct training for staff on updated procedures\n- Review and test the change management process annually",
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
-            [
-                'question' => 'Have checks been made to verify that IT policies, including those related to data protection, acceptable use, and security, are being actively enforced?',
-                'description' => 'Assess enforcement of IT policies',
-                'category' => 'Policy Enforcement',
-                'possible_answers' => ['Yes', 'No'],
-                'risk_criteria' => [
-                    'high' => ['No'],
-                    'low' => ['Yes']
-                ],
-                'possible_recommendation' => "IT Policy Enforcement Framework.\n- Implement monitoring tools for policy compliance\n- Conduct regular policy enforcement audits\n- Provide training on policy importance and compliance\n- Review and update policies annually",
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
-            [
-                'question' => 'Are internal audits conducted to ensure adherence to these policies?',
-                'description' => 'Evaluate internal audit practices for policy adherence',
-                'category' => 'Policy Enforcement',
-                'possible_answers' => ['Yes', 'No'],
-                'risk_criteria' => [
-                    'high' => ['No'],
-                    'low' => ['Yes']
-                ],
-                'possible_recommendation' => "Internal Audit Program.\n- Schedule bi-annual internal audits\n- Use automated tools for audit trails and reporting\n- Ensure audits cover all critical areas of policy adherence\n- Provide management with audit findings and recommendations",
-                'created_at' => now(),
-                'updated_at' => now(),
+                'risk_criteria' => ['high' => ['No'], 'low' => ['Yes']],
+                'possible_recommendation' => 'Implement adjustable role-based access controls and conduct quarterly privilege reviews.',
             ],
             [
                 'question' => 'Are regular policy training and updates being provided for the team?',
-                'description' => 'Assess provision of policy training and updates',
-                'category' => 'Policy Enforcement',
+                'description' => 'Verify that security policy training is conducted regularly for all staff.',
+                'category' => 'Training',
                 'possible_answers' => ['Yes', 'No'],
-                'risk_criteria' => [
-                    'high' => ['No'],
-                    'low' => ['Yes']
-                ],
-                'possible_recommendation' => "Policy Training and Awareness Program.\n- Provide annual policy training for all employees\n- Use interactive methods like workshops and e-learning\n- Test knowledge retention with follow-up assessments\n- Update training materials based on policy changes",
-                'created_at' => now(),
-                'updated_at' => now(),
+                'risk_criteria' => ['high' => ['No'], 'low' => ['Yes']],
+                'possible_recommendation' => 'Provide annual security policy training using interactive methods like workshops and e-learning.',
+            ],
+            [
+                'question' => 'Has the current data load on the network been assessed to ensure there are no bottlenecks?',
+                'description' => 'Verify that network performance is regularly assessed to identify and resolve bottlenecks.',
+                'category' => 'Configuration Management',
+                'possible_answers' => ['Yes', 'No'],
+                'risk_criteria' => ['high' => ['No'], 'low' => ['Yes']],
+                'possible_recommendation' => 'Establish baseline performance metrics and conduct quarterly network load assessments.',
             ],
         ];
 
-        // Clear existing questions first (optional - remove if you want to keep existing data)
-        // AuditQuestion::truncate();
+        // NIST Questions (10)
+        $nistQuestions = [
+            [
+                'question' => 'Is access to individual resources granted on a per-session basis?',
+                'description' => 'NIST SP 800-207: Verify zero trust architecture with per-session access grants.',
+                'category' => 'NIST SP 800-207 Zero Trust Architecture',
+                'possible_answers' => ['Yes', 'No'],
+                'risk_criteria' => ['high' => ['No'], 'low' => ['Yes']],
+                'possible_recommendation' => 'Implement Identity-Aware Proxy (IAP) for per-session resource access with continuous re-authentication.',
+            ],
+            [
+                'question' => 'Are all resources monitored and in a "known state" before access is granted?',
+                'description' => 'NIST SP 800-207: Verify resource health monitoring before access.',
+                'category' => 'NIST SP 800-207 Zero Trust Architecture',
+                'possible_answers' => ['Yes', 'No'],
+                'risk_criteria' => ['high' => ['No'], 'low' => ['Yes']],
+                'possible_recommendation' => 'Implement device health checks ensuring active EDR, encryption, and current patching before access.',
+            ],
+            [
+                'question' => 'Is there a "Freeze" process during major network changes?',
+                'description' => 'NIST SP 800-53: Verify configuration change control procedures.',
+                'category' => 'NIST SP 800-53 Secure Configuration & Maintenance',
+                'possible_answers' => ['Yes', 'No'],
+                'risk_criteria' => ['high' => ['No'], 'low' => ['Yes']],
+                'possible_recommendation' => 'Establish Change Advisory Board (CAB) to approve and document all production configuration changes.',
+            ],
+            [
+                'question' => 'Are information system components identified and documented with their "End-of-Life" (EOL) dates?',
+                'description' => 'NIST SP 800-53: Verify supply chain risk management with EOL tracking.',
+                'category' => 'NIST SP 800-53 Secure Configuration & Maintenance',
+                'possible_answers' => ['Yes', 'No'],
+                'risk_criteria' => ['high' => ['No'], 'low' => ['Yes']],
+                'possible_recommendation' => 'Proactively plan hardware replacements before security support ends.',
+            ],
+            [
+                'question' => 'Is split-tunneling for VPNs prohibited or strictly monitored?',
+                'description' => 'NIST SP 800-171: Verify VPN boundary protection controls.',
+                'category' => 'NIST SP 800-171 Boundary & Communication Protection',
+                'possible_answers' => ['Yes', 'No'],
+                'risk_criteria' => ['high' => ['No'], 'low' => ['Yes']],
+                'possible_recommendation' => 'Force all traffic through corporate security stack or implement highly restrictive split-tunneling policies.',
+            ],
+            [
+                'question' => 'Are "Deny-by-Default" rules enforced at all network boundaries?',
+                'description' => 'NIST SP 800-171: Verify default-deny firewall configuration.',
+                'category' => 'NIST SP 800-171 Boundary & Communication Protection',
+                'possible_answers' => ['Yes', 'No'],
+                'risk_criteria' => ['high' => ['No'], 'low' => ['Yes']],
+                'possible_recommendation' => 'Ensure firewall rules allow specific business traffic first, then deny all remaining traffic.',
+            ],
+            [
+                'question' => 'Is DNS filtering used to prevent connections to known malicious domains?',
+                'description' => 'NIST SP 800-171: Verify DNS protection controls.',
+                'category' => 'NIST SP 800-171 Boundary & Communication Protection',
+                'possible_answers' => ['Yes', 'No'],
+                'risk_criteria' => ['high' => ['No'], 'low' => ['Yes']],
+                'possible_recommendation' => 'Implement Protective DNS (PDNS) to block botnet C2 traffic at the infrastructure level.',
+            ],
+            [
+                'question' => 'Have you performed a "Ruleset Review" for all Access Control Lists (ACLs)?',
+                'description' => 'NIST SP 800-115: Verify ACL review procedures.',
+                'category' => 'NIST SP 800-115 Technical Assessment',
+                'possible_answers' => ['Yes', 'No'],
+                'risk_criteria' => ['high' => ['No'], 'low' => ['Yes']],
+                'possible_recommendation' => 'Manually review router ACLs quarterly to identify shadowed rules and unnecessary access permissions.',
+            ],
+            [
+                'question' => 'Is Multi-Factor Authentication (MFA) required for all administrative access to network devices?',
+                'description' => 'Identification & Authentication: Verify MFA for admin access.',
+                'category' => 'Identification & Authentication (Access Control)',
+                'possible_answers' => ['Yes', 'No'],
+                'risk_criteria' => ['high' => ['No'], 'low' => ['Yes']],
+                'possible_recommendation' => 'Integrate network hardware with TACACS+ or RADIUS server supporting MFA.',
+            ],
+            [
+                'question' => 'Is access to the physical network room or data center restricted and logged?',
+                'description' => 'Identification & Authentication: Verify physical access controls.',
+                'category' => 'Identification & Authentication (Access Control)',
+                'possible_answers' => ['Yes', 'No'],
+                'risk_criteria' => ['high' => ['No'], 'low' => ['Yes']],
+                'possible_recommendation' => 'Implement badge access with CCTV and review physical access logs monthly.',
+            ],
+        ];
 
-        foreach ($questions as $questionData) {
-            // Remove 'suggestions' key and timestamps if present
-            unset($questionData['suggestions']);
-            unset($questionData['created_at'], $questionData['updated_at']);
+        // PCI Questions (10)
+        $pciQuestions = [
+            [
+                'question' => 'Is there a formal process for testing and approving all network connections?',
+                'description' => 'PCI DSS: Verify network connection testing and approval procedures.',
+                'category' => 'Network Security & Firewalls',
+                'possible_answers' => ['Yes', 'No'],
+                'risk_criteria' => ['high' => ['No'], 'low' => ['Yes']],
+                'possible_recommendation' => 'Maintain documented Network Diagram showing all cardholder data flows and review firewall rules bi-annually.',
+            ],
+            [
+                'question' => 'Are "any-any" inbound/outbound rules prohibited?',
+                'description' => 'PCI DSS: Verify least privilege network rules.',
+                'category' => 'Network Security & Firewalls',
+                'possible_answers' => ['Yes', 'No'],
+                'risk_criteria' => ['high' => ['No'], 'low' => ['Yes']],
+                'possible_recommendation' => 'Implement Least Privilege: Deny all by default and only allow specifically required protocols.',
+            ],
+            [
+                'question' => 'Is the Primary Account Number (PAN) rendered unreadable wherever it is stored?',
+                'description' => 'PCI DSS: Verify data protection for cardholder information.',
+                'category' => 'Protection of Stored Account Data',
+                'possible_answers' => ['Yes', 'No'],
+                'risk_criteria' => ['high' => ['No'], 'low' => ['Yes']],
+                'possible_recommendation' => 'Use AES-256 encryption, hashing, or tokenization. Never store sensitive authentication data after authorization.',
+            ],
+            [
+                'question' => 'Is there a documented data retention policy?',
+                'description' => 'PCI DSS: Verify data retention and purging procedures.',
+                'category' => 'Protection of Stored Account Data',
+                'possible_answers' => ['Yes', 'No'],
+                'risk_criteria' => ['high' => ['No'], 'low' => ['Yes']],
+                'possible_recommendation' => 'Purge unnecessary data using automated secure deletion tools for data exceeding retention period.',
+            ],
+            [
+                'question' => 'Are critical security patches installed within 30 days of release?',
+                'description' => 'PCI DSS: Verify patch management timelines.',
+                'category' => 'Vulnerability Management',
+                'possible_answers' => ['Yes', 'No'],
+                'risk_criteria' => ['high' => ['No'], 'low' => ['Yes']],
+                'possible_recommendation' => 'Establish patch management hierarchy prioritizing Critical and High vulnerabilities with automated scanning.',
+            ],
+            [
+                'question' => 'How are custom software applications protected against common attacks (e.g., SQL injection)?',
+                'description' => 'PCI DSS: Verify application security controls.',
+                'category' => 'Vulnerability Management',
+                'possible_answers' => ['Yes', 'No'],
+                'risk_criteria' => ['high' => ['No'], 'low' => ['Yes']],
+                'possible_recommendation' => 'Integrate security into SDLC, implement Web Application Firewalls (WAF), and conduct annual penetration testing.',
+            ],
+            [
+                'question' => 'Are unique IDs assigned to every person with computer access?',
+                'description' => 'PCI DSS: Verify unique user account requirements.',
+                'category' => 'Access Control & Identity Management',
+                'possible_answers' => ['Yes', 'No'],
+                'risk_criteria' => ['high' => ['No'], 'low' => ['Yes']],
+                'possible_recommendation' => 'Never use shared accounts. Disable accounts immediately upon employee termination.',
+            ],
+            [
+                'question' => 'Is Multi-Factor Authentication (MFA) implemented for all access into the Cardholder Data Environment (CDE)?',
+                'description' => 'PCI DSS v4.0: Mandatory MFA for CDE access.',
+                'category' => 'Monitoring and Testing',
+                'possible_answers' => ['Yes', 'No'],
+                'risk_criteria' => ['high' => ['No'], 'low' => ['Yes']],
+                'possible_recommendation' => 'Implement phishing-resistant MFA for all CDE access, not just remote access.',
+            ],
+            [
+                'question' => 'Are logs reviewed daily for security events?',
+                'description' => 'PCI DSS: Verify logging and monitoring procedures.',
+                'category' => 'Monitoring and Testing',
+                'possible_answers' => ['Yes', 'No'],
+                'risk_criteria' => ['high' => ['No'], 'low' => ['Yes']],
+                'possible_recommendation' => 'Use SIEM tools for automated log collection and alerting instead of manual review.',
+            ],
+            [
+                'question' => 'Are internal and external vulnerability scans performed quarterly?',
+                'description' => 'PCI DSS: Verify regular vulnerability assessment practices.',
+                'category' => 'Monitoring and Testing',
+                'possible_answers' => ['Yes', 'No'],
+                'risk_criteria' => ['high' => ['No'], 'low' => ['Yes']],
+                'possible_recommendation' => 'Use ASV (Approved Scanning Vendor) for external scans and ensure Passing scan every 90 days.',
+            ],
+        ];
 
-            // Add the default questionnaire set ID
-            $questionData['questionnaire_set_id'] = $defaultSetId;
+        // Store all question sets
+        $questionSets = [
+            'ISO 27001' => $iso27001Questions,
+            'NIST' => $nistQuestions,
+            'PCI' => $pciQuestions,
+        ];
 
-            // Use updateOrCreate keyed on the question text so the seeder is safe to run multiple times
-            AuditQuestion::updateOrCreate(
-                ['question' => $questionData['question']],
-                $questionData
-            );
+        // Store in cache for QuestionnaireSetSeeder to use
+        \Illuminate\Support\Facades\Cache::put('audit_question_sets', $questionSets, 3600);
+
+        // Seed questions without set association (will be assigned in QuestionnaireSetSeeder)
+        foreach ($questionSets as $setName => $questions) {
+            foreach ($questions as $questionData) {
+                AuditQuestion::updateOrCreate(
+                    ['question' => $questionData['question']],
+                    $questionData
+                );
+            }
         }
+
+        $this->command->info('30 audit questions prepared for seeding into 3 questionnaire sets (ISO 27001, NIST, PCI).');
     }
 }
