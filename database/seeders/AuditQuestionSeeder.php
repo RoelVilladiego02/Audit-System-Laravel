@@ -3,12 +3,47 @@
 namespace Database\Seeders;
 
 use App\Models\AuditQuestion;
+use App\Models\AuditQuestionnaireSet;
+use App\Models\User;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 
 class AuditQuestionSeeder extends Seeder
 {
     public function run(): void
     {
+        // Ensure the default questionnaire set exists
+        // This handles the case where the migration couldn't create it
+        // (e.g., no admin user existed yet during migration)
+        $admin = User::where('role', 'admin')->first();
+        
+        if ($admin) {
+            $defaultSet = AuditQuestionnaireSet::firstOrCreate(
+                ['name' => 'Default Audit Set'],
+                [
+                    'description' => 'Default questionnaire set',
+                    'status' => 'active',
+                    'created_by' => $admin->id,
+                    'updated_by' => $admin->id,
+                ]
+            );
+            $defaultSetId = $defaultSet->id;
+        } else {
+            // Fallback: get the first questionnaire set ID from the database
+            // or create one without a creator
+            $defaultSetId = DB::table('audit_questionnaire_sets')->value('id');
+            if (!$defaultSetId) {
+                DB::table('audit_questionnaire_sets')->insert([
+                    'name' => 'Default Audit Set',
+                    'description' => 'Default questionnaire set',
+                    'status' => 'active',
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+                $defaultSetId = DB::table('audit_questionnaire_sets')->value('id');
+            }
+        }
+
         $questions = [
             [
                 'question' => 'Has a detailed inventory of all physical devices been created?',
@@ -331,6 +366,9 @@ class AuditQuestionSeeder extends Seeder
             // Remove 'suggestions' key and timestamps if present
             unset($questionData['suggestions']);
             unset($questionData['created_at'], $questionData['updated_at']);
+
+            // Add the default questionnaire set ID
+            $questionData['questionnaire_set_id'] = $defaultSetId;
 
             // Use updateOrCreate keyed on the question text so the seeder is safe to run multiple times
             AuditQuestion::updateOrCreate(
