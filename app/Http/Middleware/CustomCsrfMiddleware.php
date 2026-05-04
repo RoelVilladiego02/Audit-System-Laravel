@@ -24,6 +24,7 @@ class CustomCsrfMiddleware
             'api/audit-submissions*',
             'api/vulnerability-submissions*',
             'api/audit-questions*',
+            'api/questionnaire-sets*',
             'api/vulnerabilities*',
             'api/user/*',
         ];
