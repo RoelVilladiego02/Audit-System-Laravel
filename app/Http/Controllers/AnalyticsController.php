@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\VulnerabilitySubmission;
 use App\Models\AuditSubmission;
-use App\Models\AuditQuestion;
 use App\Models\Vulnerability;
 use App\Models\AuditAnswer;
 use Carbon\Carbon;
@@ -24,7 +23,6 @@ class AnalyticsController extends Controller
             $timeRange = $request->input('timeRange', 'week');
             $userId = $request->input('userId');
             $type = $request->input('type', 'all');
-            $questionnaireSetId = $request->input('questionnaire_set_id');
             $startDateInput = $request->input('startDate');
             $endDateInput = $request->input('endDate');
 
@@ -34,7 +32,6 @@ class AnalyticsController extends Controller
                 'timeRange' => $timeRange,
                 'userId' => $userId,
                 'type' => $type,
-                'questionnaire_set_id' => $questionnaireSetId,
                 'startDate' => $startDate->toDateTimeString()
             ]);
 
@@ -49,11 +46,11 @@ class AnalyticsController extends Controller
 
             // Get data based on type
             if ($type === 'vulnerability') {
-                $data = $this->getVulnerabilityAnalytics($startDate, $userId, $questionnaireSetId);
+                $data = $this->getVulnerabilityAnalytics($startDate, $userId);
             } elseif ($type === 'audit') {
-                $data = $this->getAuditAnalytics($startDate, $userId, $questionnaireSetId);
+                $data = $this->getAuditAnalytics($startDate, $userId);
             } else {
-                $data = $this->getCombinedAnalytics($startDate, $userId, $questionnaireSetId);
+                $data = $this->getCombinedAnalytics($startDate, $userId);
             }
 
             return response()->json($data);
@@ -104,7 +101,7 @@ class AnalyticsController extends Controller
     /**
      * Get vulnerability analytics data.
      */
-    private function getVulnerabilityAnalytics(Carbon $startDate, ?int $userId = null, ?int $questionnaireSetId = null): array
+    private function getVulnerabilityAnalytics(Carbon $startDate, ?int $userId = null): array
     {
         $query = VulnerabilitySubmission::query()
             ->when($userId, function ($q) use ($userId) {
@@ -129,14 +126,11 @@ class AnalyticsController extends Controller
     /**
      * Get audit analytics data.
      */
-    private function getAuditAnalytics(Carbon $startDate, ?int $userId = null, ?int $questionnaireSetId = null): array
+    private function getAuditAnalytics(Carbon $startDate, ?int $userId = null): array
     {
         $query = AuditSubmission::query()
             ->when($userId, function ($q) use ($userId) {
                 return $q->where('user_id', (int) $userId);
-            })
-            ->when($questionnaireSetId, function ($q) use ($questionnaireSetId) {
-                return $q->where('questionnaire_set_id', (int) $questionnaireSetId);
             })
             ->where('created_at', '>=', $startDate);
 
@@ -157,30 +151,27 @@ class AnalyticsController extends Controller
     /**
      * Get combined vulnerability and audit analytics.
      */
-    private function getCombinedAnalytics(Carbon $startDate, ?int $userId = null, ?int $questionnaireSetId = null): array
+    private function getCombinedAnalytics(Carbon $startDate, ?int $userId = null): array
     {
-        $vulnData = $this->getVulnerabilityAnalytics($startDate, $userId, $questionnaireSetId);
-        $auditData = $this->getAuditAnalytics($startDate, $userId, $questionnaireSetId);
+        $vulnData = $this->getVulnerabilityAnalytics($startDate, $userId);
+        $auditData = $this->getAuditAnalytics($startDate, $userId);
 
         // Get audit-to-vulnerability conversion stats
         $auditQuery = AuditSubmission::query()
             ->when($userId, function ($q) use ($userId) {
                 return $q->where('user_id', (int) $userId);
             })
-            ->when($questionnaireSetId, function ($q) use ($questionnaireSetId) {
-                return $q->where('questionnaire_set_id', (int) $questionnaireSetId);
-            })
             ->where('created_at', '>=', $startDate);
 
         $conversionStats = $this->getAuditToVulnerabilityConversion($auditQuery);
         
         // Get questionnaire set breakdown
-        $questionnaireSetStats = $this->getQuestionnaireSetBreakdown($startDate, $userId, $questionnaireSetId);
+        $questionnaireSetStats = $this->getQuestionnaireSetBreakdown($startDate, $userId);
         
-        // Get new advanced questionnaire set analytics
-        $setPerformanceMetrics = $this->getQuestionnaireSetPerformanceMetrics($startDate, $userId, $questionnaireSetId);
-        $questionEffectivenessAnalysis = $this->getQuestionEffectivenessAnalysis($startDate, $userId, $questionnaireSetId);
-        $setToRiskCorrelation = $this->getSetToRiskCorrelation($startDate, $userId, $questionnaireSetId);
+        // Get advanced questionnaire set analytics
+        $setPerformanceMetrics = $this->getQuestionnaireSetPerformanceMetrics($startDate, $userId);
+        $questionEffectivenessAnalysis = $this->getQuestionEffectivenessAnalysis($startDate, $userId);
+        $setToRiskCorrelation = $this->getSetToRiskCorrelation($startDate, $userId);
 
         return [
             'type' => 'combined',
@@ -480,15 +471,18 @@ class AnalyticsController extends Controller
             ];
         }
 
+        // Count manual submissions (those not generated from audits)
+        $manualSubmissions = $query->whereDoesntHave('user.auditSubmissions', function($q) {
+            $q->where('status', 'completed');
+        })->count();
+
         // Count audit-generated submissions (those with titles starting with "High Risk Audit")
         $auditGeneratedSubmissions = $query->where('title', 'LIKE', 'High Risk Audit - %')->count();
-        $total = $submissionIds->count();
-        $manualSubmissions = $total - $auditGeneratedSubmissions;
 
         return [
             'manual_submissions' => (int) $manualSubmissions,
             'audit_generated_submissions' => (int) $auditGeneratedSubmissions,
-            'total_submissions' => (int) $total
+            'total_submissions' => (int) $submissionIds->count()
         ];
     }
 
@@ -660,7 +654,7 @@ class AnalyticsController extends Controller
     /**
      * Get analytics breakdown by questionnaire set.
      */
-    private function getQuestionnaireSetBreakdown(Carbon $startDate, ?int $userId = null, ?int $questionnaireSetId = null): array
+    private function getQuestionnaireSetBreakdown(Carbon $startDate, ?int $userId = null): array
     {
         $query = AuditSubmission::query()
             ->where('created_at', '>=', $startDate)
@@ -671,10 +665,6 @@ class AnalyticsController extends Controller
         
         if ($userId) {
             $query->where('user_id', $userId);
-        }
-        
-        if ($questionnaireSetId) {
-            $query->where('questionnaire_set_id', $questionnaireSetId);
         }
 
         return $query->get()->map(function($item) {
@@ -691,7 +681,7 @@ class AnalyticsController extends Controller
      * Get questionnaire set performance metrics.
      * Shows: high-risk submissions, completion rates, avg review time, difficulty levels
      */
-    private function getQuestionnaireSetPerformanceMetrics(Carbon $startDate, ?int $userId = null, ?int $questionnaireSetId = null): array
+    private function getQuestionnaireSetPerformanceMetrics(Carbon $startDate, ?int $userId = null): array
     {
         $query = AuditSubmission::query()
             ->where('created_at', '>=', $startDate)
@@ -700,14 +690,10 @@ class AnalyticsController extends Controller
         if ($userId) {
             $query->where('user_id', $userId);
         }
-        
-        if ($questionnaireSetId) {
-            $query->where('questionnaire_set_id', $questionnaireSetId);
-        }
 
         $sets = $query->get()->groupBy('questionnaire_set_id');
 
-        return $sets->map(function($submissions, $setId) {
+        return $sets->map(function($submissions) {
             $total = $submissions->count();
             $completed = $submissions->where('status', 'completed')->count();
             $highRisk = $submissions->where('system_overall_risk', 'high')->count();
@@ -730,7 +716,6 @@ class AnalyticsController extends Controller
             $setName = $submissions->first()?->questionnaireSet?->name ?? 'Unknown Set';
 
             return [
-                'set_id' => $setId,
                 'set_name' => $setName,
                 'total_submissions' => $total,
                 'completed_submissions' => $completed,
@@ -753,7 +738,7 @@ class AnalyticsController extends Controller
      * Get question effectiveness analysis.
      * Shows: high-risk questions per set, vulnerability triggers, answer distributions, problematic questions
      */
-    private function getQuestionEffectivenessAnalysis(Carbon $startDate, ?int $userId = null, ?int $questionnaireSetId = null): array
+    private function getQuestionEffectivenessAnalysis(Carbon $startDate, ?int $userId = null): array
     {
         $submissionQuery = AuditSubmission::query()
             ->where('created_at', '>=', $startDate);
@@ -761,17 +746,12 @@ class AnalyticsController extends Controller
         if ($userId) {
             $submissionQuery->where('user_id', $userId);
         }
-        
-        if ($questionnaireSetId) {
-            $submissionQuery->where('questionnaire_set_id', $questionnaireSetId);
-        }
 
         $submissionIds = $submissionQuery->pluck('id');
 
         if ($submissionIds->isEmpty()) {
             return [
                 'high_risk_questions' => [],
-                'vulnerability_triggering_questions' => [],
                 'problematic_questions' => [],
                 'question_analysis_by_set' => []
             ];
@@ -800,55 +780,27 @@ class AnalyticsController extends Controller
             ->limit(10)
             ->get();
 
-        // Analysis by questionnaire set
-        $questionAnalysisBySet = AuditQuestion::whereIn('audit_question_id', 
-            AuditAnswer::whereIn('audit_submission_id', $submissionIds)
-                ->distinct()
-                ->pluck('audit_question_id'))
-            ->with('questionnaireSet:id,name')
-            ->get()
-            ->groupBy('questionnaire_set_id')
-            ->map(function($questionsInSet) use ($submissionIds) {
-                $setName = $questionsInSet->first()?->questionnaireSet?->name ?? 'Unknown Set';
-                
-                $highRiskQCount = AuditAnswer::whereIn('audit_submission_id', $submissionIds)
-                    ->whereIn('audit_question_id', $questionsInSet->pluck('id'))
-                    ->where(function($q) {
-                        $q->where('admin_risk_level', 'high')
-                          ->orWhere('system_risk_level', 'high');
-                    })
-                    ->distinct()
-                    ->pluck('audit_question_id')
-                    ->unique()
-                    ->count();
-
-                return [
-                    'set_name' => $setName,
-                    'total_questions' => $questionsInSet->count(),
-                    'high_risk_question_count' => $highRiskQCount,
-                    'average_risk_score' => round($questionsInSet->count() > 0 ? $highRiskQCount / $questionsInSet->count() * 100 : 0, 2),
-                ];
-            })
-            ->values()
-            ->toArray();
-
         return [
-            'high_risk_questions' => $highRiskQuestions->map(fn($q) => [
-                'question_id' => $q->audit_question_id,
-                'question_text' => $q->question?->question ?? 'Unknown',
-                'category' => $q->question?->category ?? 'Unknown',
-                'high_risk_count' => (int) $q->high_risk_count,
-                'questionnaire_set_id' => $q->question?->questionnaire_set_id,
-            ])->toArray(),
-            'problematic_questions' => $problematicAnswers->map(fn($q) => [
-                'question_id' => $q->audit_question_id,
-                'question_text' => $q->question?->question ?? 'Unknown',
-                'category' => $q->question?->category ?? 'Unknown',
-                'custom_answer_count' => (int) $q->custom_answer_count,
-                'questionnaire_set_id' => $q->question?->questionnaire_set_id,
-                'issue' => 'Question ambiguity - users providing custom answers instead of predefined options'
-            ])->toArray(),
-            'question_analysis_by_set' => $questionAnalysisBySet
+            'high_risk_questions' => $highRiskQuestions->map(function($q) {
+                return [
+                    'question_id' => $q->audit_question_id,
+                    'question_text' => $q->question?->question ?? 'Unknown',
+                    'category' => $q->question?->category ?? 'Unknown',
+                    'high_risk_count' => (int) $q->high_risk_count,
+                    'questionnaire_set_id' => $q->question?->questionnaire_set_id,
+                ];
+            })->toArray(),
+            'problematic_questions' => $problematicAnswers->map(function($q) {
+                return [
+                    'question_id' => $q->audit_question_id,
+                    'question_text' => $q->question?->question ?? 'Unknown',
+                    'category' => $q->question?->category ?? 'Unknown',
+                    'custom_answer_count' => (int) $q->custom_answer_count,
+                    'questionnaire_set_id' => $q->question?->questionnaire_set_id,
+                    'issue' => 'Question ambiguity - users providing custom answers instead of predefined options'
+                ];
+            })->toArray(),
+            'question_analysis_by_set' => []
         ];
     }
 
@@ -856,7 +808,7 @@ class AnalyticsController extends Controller
      * Get set-to-risk correlation analysis.
      * Shows: risk distribution comparison across sets, heatmap data, admin overrides by set
      */
-    private function getSetToRiskCorrelation(Carbon $startDate, ?int $userId = null, ?int $questionnaireSetId = null): array
+    private function getSetToRiskCorrelation(Carbon $startDate, ?int $userId = null): array
     {
         $submissionQuery = AuditSubmission::query()
             ->where('created_at', '>=', $startDate)
@@ -864,10 +816,6 @@ class AnalyticsController extends Controller
         
         if ($userId) {
             $submissionQuery->where('user_id', $userId);
-        }
-        
-        if ($questionnaireSetId) {
-            $submissionQuery->where('questionnaire_set_id', $questionnaireSetId);
         }
 
         $submissions = $submissionQuery->get();
@@ -881,17 +829,16 @@ class AnalyticsController extends Controller
         }
 
         // Build risk heatmap: set vs risk level
-        $riskHeatmap = $submissions->groupBy('questionnaire_set_id')->map(function($setSubmissions, $setId) {
+        $riskHeatmap = $submissions->groupBy('questionnaire_set_id')->map(function($setSubmissions) {
             $setName = $setSubmissions->first()?->questionnaireSet?->name ?? 'Unknown Set';
             $total = $setSubmissions->count();
 
             $highCount = $setSubmissions->where('system_overall_risk', 'high')->count();
             $mediumCount = $setSubmissions->where('system_overall_risk', 'medium')->count();
             $lowCount = $setSubmissions->where('system_overall_risk', 'low')->count();
-            $pendingCount = $setSubmissions->where('system_overall_risk', 'pending')->count();
+            $pendingCount = $total - $highCount - $mediumCount - $lowCount;
 
             return [
-                'set_id' => $setId,
                 'set_name' => $setName,
                 'total' => $total,
                 'high' => ['count' => $highCount, 'percentage' => $total > 0 ? round(($highCount / $total) * 100, 1) : 0],
@@ -902,7 +849,7 @@ class AnalyticsController extends Controller
         })->values()->toArray();
 
         // Admin override analysis by set
-        $adminOverrideAnalysis = $submissions->groupBy('questionnaire_set_id')->map(function($setSubmissions, $setId) {
+        $adminOverrideAnalysis = $submissions->groupBy('questionnaire_set_id')->map(function($setSubmissions) {
             $setName = $setSubmissions->first()?->questionnaireSet?->name ?? 'Unknown Set';
             
             // Count overrides: where admin_overall_risk differs from system_overall_risk
@@ -912,24 +859,12 @@ class AnalyticsController extends Controller
             })->count();
 
             $total = $setSubmissions->count();
-            
-            // Break down override types
-            $riskIncreases = 0; // Admin marked higher risk than system
-            $riskDecreases = 0; // Admin marked lower risk than system
-            
-            $overrideBreakdown = [];
-            foreach ($setSubmissions->filter(fn($s) => $s->admin_overall_risk) as $submission) {
-                $key = ($submission->system_overall_risk ?? 'pending') . '_to_' . $submission->admin_overall_risk;
-                $overrideBreakdown[$key] = ($overrideBreakdown[$key] ?? 0) + 1;
-            }
 
             return [
-                'set_id' => $setId,
                 'set_name' => $setName,
                 'total_submissions' => $total,
                 'override_count' => $overrideCount,
                 'override_percentage' => $total > 0 ? round(($overrideCount / $total) * 100, 1) : 0,
-                'override_breakdown' => $overrideBreakdown,
             ];
         })->values()->toArray();
 
