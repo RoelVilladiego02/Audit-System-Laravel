@@ -480,18 +480,15 @@ class AnalyticsController extends Controller
             ];
         }
 
-        // Count manual submissions (those not generated from audits)
-        $manualSubmissions = $query->whereDoesntHave('user.auditSubmissions', function($q) {
-            $q->where('status', 'completed');
-        })->count();
-
         // Count audit-generated submissions (those with titles starting with "High Risk Audit")
         $auditGeneratedSubmissions = $query->where('title', 'LIKE', 'High Risk Audit - %')->count();
+        $total = $submissionIds->count();
+        $manualSubmissions = $total - $auditGeneratedSubmissions;
 
         return [
             'manual_submissions' => (int) $manualSubmissions,
             'audit_generated_submissions' => (int) $auditGeneratedSubmissions,
-            'total_submissions' => (int) $submissionIds->count()
+            'total_submissions' => (int) $total
         ];
     }
 
@@ -730,7 +727,7 @@ class AnalyticsController extends Controller
             $highRiskPercentage = $total > 0 ? round(($highRisk / $total) * 100, 2) : 0;
             $difficulty = $highRiskPercentage >= 60 ? 'high' : ($highRiskPercentage >= 30 ? 'medium' : 'low');
 
-            $setName = $submissions->first()->questionnaireSet->name ?? 'Unknown Set';
+            $setName = $submissions->first()?->questionnaireSet?->name ?? 'Unknown Set';
 
             return [
                 'set_id' => $setId,
@@ -812,7 +809,7 @@ class AnalyticsController extends Controller
             ->get()
             ->groupBy('questionnaire_set_id')
             ->map(function($questionsInSet) use ($submissionIds) {
-                $setName = $questionsInSet->first()->questionnaireSet->name ?? 'Unknown Set';
+                $setName = $questionsInSet->first()?->questionnaireSet?->name ?? 'Unknown Set';
                 
                 $highRiskQCount = AuditAnswer::whereIn('audit_submission_id', $submissionIds)
                     ->whereIn('audit_question_id', $questionsInSet->pluck('id'))
@@ -838,17 +835,17 @@ class AnalyticsController extends Controller
         return [
             'high_risk_questions' => $highRiskQuestions->map(fn($q) => [
                 'question_id' => $q->audit_question_id,
-                'question_text' => $q->question->question ?? 'Unknown',
-                'category' => $q->question->category ?? 'Unknown',
+                'question_text' => $q->question?->question ?? 'Unknown',
+                'category' => $q->question?->category ?? 'Unknown',
                 'high_risk_count' => (int) $q->high_risk_count,
-                'questionnaire_set_id' => $q->question->questionnaire_set_id,
+                'questionnaire_set_id' => $q->question?->questionnaire_set_id,
             ])->toArray(),
             'problematic_questions' => $problematicAnswers->map(fn($q) => [
                 'question_id' => $q->audit_question_id,
-                'question_text' => $q->question->question ?? 'Unknown',
-                'category' => $q->question->category ?? 'Unknown',
+                'question_text' => $q->question?->question ?? 'Unknown',
+                'category' => $q->question?->category ?? 'Unknown',
                 'custom_answer_count' => (int) $q->custom_answer_count,
-                'questionnaire_set_id' => $q->question->questionnaire_set_id,
+                'questionnaire_set_id' => $q->question?->questionnaire_set_id,
                 'issue' => 'Question ambiguity - users providing custom answers instead of predefined options'
             ])->toArray(),
             'question_analysis_by_set' => $questionAnalysisBySet
@@ -885,7 +882,7 @@ class AnalyticsController extends Controller
 
         // Build risk heatmap: set vs risk level
         $riskHeatmap = $submissions->groupBy('questionnaire_set_id')->map(function($setSubmissions, $setId) {
-            $setName = $setSubmissions->first()->questionnaireSet->name ?? 'Unknown Set';
+            $setName = $setSubmissions->first()?->questionnaireSet?->name ?? 'Unknown Set';
             $total = $setSubmissions->count();
 
             $highCount = $setSubmissions->where('system_overall_risk', 'high')->count();
@@ -906,7 +903,7 @@ class AnalyticsController extends Controller
 
         // Admin override analysis by set
         $adminOverrideAnalysis = $submissions->groupBy('questionnaire_set_id')->map(function($setSubmissions, $setId) {
-            $setName = $setSubmissions->first()->questionnaireSet->name ?? 'Unknown Set';
+            $setName = $setSubmissions->first()?->questionnaireSet?->name ?? 'Unknown Set';
             
             // Count overrides: where admin_overall_risk differs from system_overall_risk
             $overrideCount = $setSubmissions->filter(function($submission) {
