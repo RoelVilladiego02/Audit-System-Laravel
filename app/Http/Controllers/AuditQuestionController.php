@@ -31,11 +31,10 @@ class AuditQuestionController extends Controller
     /**
      * Store a newly created audit question within a questionnaire set.
      */
-    public function store(Request $request): JsonResponse
+    public function store(Request $request, AuditQuestionnaireSet $set): JsonResponse
     {
         try {
             $validated = $request->validate([
-                'questionnaire_set_id' => 'required|integer|exists:audit_questionnaire_sets,id',
                 'question' => 'required|string|max:1000',
                 'description' => 'nullable|string|max:2000',
                 'category' => 'required|string|max:255',
@@ -51,11 +50,10 @@ class AuditQuestionController extends Controller
                 'possible_recommendation' => 'nullable|string|max:2000',
             ]);
 
-            // Validate that the set exists and is not archived
-            $set = \App\Models\AuditQuestionnaireSet::find($validated['questionnaire_set_id']);
-            if (!$set || $set->status === 'archived') {
+            // Validate that the set is not archived
+            if ($set->status === 'archived') {
                 throw \Illuminate\Validation\ValidationException::withMessages([
-                    'questionnaire_set_id' => 'The selected questionnaire set does not exist or is archived.'
+                    'questionnaire_set' => 'The selected questionnaire set does not exist or is archived.'
                 ]);
             }
 
@@ -65,7 +63,10 @@ class AuditQuestionController extends Controller
             // Validate that risk criteria answers exist in possible answers (excluding "Others")
             $this->validateRiskCriteria($validated['risk_criteria'], $validated['possible_answers']);
 
-            $question = AuditQuestion::create($validated);
+            $question = AuditQuestion::create([
+                ...$validated,
+                'questionnaire_set_id' => $set->id
+            ]);
             
             return response()->json([
                 'message' => 'Question created successfully in questionnaire set.',
@@ -110,9 +111,16 @@ class AuditQuestionController extends Controller
     /**
      * Update the specified audit question.
      */
-    public function update(Request $request, AuditQuestion $auditQuestion): JsonResponse
+    public function update(Request $request, AuditQuestionnaireSet $set, AuditQuestion $auditQuestion): JsonResponse
     {
         try {
+            // Verify the question belongs to the specified set
+            if ($auditQuestion->questionnaire_set_id !== $set->id) {
+                return response()->json([
+                    'message' => 'Question does not belong to the specified questionnaire set.',
+                ], 404);
+            }
+
             $validated = $request->validate([
                 'question' => 'required|string|max:1000',
                 'description' => 'nullable|string|max:2000',
