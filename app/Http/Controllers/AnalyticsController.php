@@ -23,6 +23,7 @@ class AnalyticsController extends Controller
             $timeRange = $request->input('timeRange', 'week');
             $userId = $request->input('userId');
             $type = $request->input('type', 'all');
+            $questionnaireSetId = $request->input('questionnaire_set_id');
             $startDateInput = $request->input('startDate');
             $endDateInput = $request->input('endDate');
 
@@ -32,6 +33,7 @@ class AnalyticsController extends Controller
                 'timeRange' => $timeRange,
                 'userId' => $userId,
                 'type' => $type,
+                'questionnaire_set_id' => $questionnaireSetId,
                 'startDate' => $startDate->toDateTimeString()
             ]);
 
@@ -46,11 +48,11 @@ class AnalyticsController extends Controller
 
             // Get data based on type
             if ($type === 'vulnerability') {
-                $data = $this->getVulnerabilityAnalytics($startDate, $userId);
+                $data = $this->getVulnerabilityAnalytics($startDate, $userId, $questionnaireSetId);
             } elseif ($type === 'audit') {
-                $data = $this->getAuditAnalytics($startDate, $userId);
+                $data = $this->getAuditAnalytics($startDate, $userId, $questionnaireSetId);
             } else {
-                $data = $this->getCombinedAnalytics($startDate, $userId);
+                $data = $this->getCombinedAnalytics($startDate, $userId, $questionnaireSetId);
             }
 
             return response()->json($data);
@@ -101,7 +103,7 @@ class AnalyticsController extends Controller
     /**
      * Get vulnerability analytics data.
      */
-    private function getVulnerabilityAnalytics(Carbon $startDate, ?int $userId = null): array
+    private function getVulnerabilityAnalytics(Carbon $startDate, ?int $userId = null, ?int $questionnaireSetId = null): array
     {
         $query = VulnerabilitySubmission::query()
             ->when($userId, function ($q) use ($userId) {
@@ -126,11 +128,14 @@ class AnalyticsController extends Controller
     /**
      * Get audit analytics data.
      */
-    private function getAuditAnalytics(Carbon $startDate, ?int $userId = null): array
+    private function getAuditAnalytics(Carbon $startDate, ?int $userId = null, ?int $questionnaireSetId = null): array
     {
         $query = AuditSubmission::query()
             ->when($userId, function ($q) use ($userId) {
                 return $q->where('user_id', (int) $userId);
+            })
+            ->when($questionnaireSetId, function ($q) use ($questionnaireSetId) {
+                return $q->where('questionnaire_set_id', (int) $questionnaireSetId);
             })
             ->where('created_at', '>=', $startDate);
 
@@ -151,27 +156,30 @@ class AnalyticsController extends Controller
     /**
      * Get combined vulnerability and audit analytics.
      */
-    private function getCombinedAnalytics(Carbon $startDate, ?int $userId = null): array
+    private function getCombinedAnalytics(Carbon $startDate, ?int $userId = null, ?int $questionnaireSetId = null): array
     {
-        $vulnData = $this->getVulnerabilityAnalytics($startDate, $userId);
-        $auditData = $this->getAuditAnalytics($startDate, $userId);
+        $vulnData = $this->getVulnerabilityAnalytics($startDate, $userId, $questionnaireSetId);
+        $auditData = $this->getAuditAnalytics($startDate, $userId, $questionnaireSetId);
 
         // Get audit-to-vulnerability conversion stats
         $auditQuery = AuditSubmission::query()
             ->when($userId, function ($q) use ($userId) {
                 return $q->where('user_id', (int) $userId);
             })
+            ->when($questionnaireSetId, function ($q) use ($questionnaireSetId) {
+                return $q->where('questionnaire_set_id', (int) $questionnaireSetId);
+            })
             ->where('created_at', '>=', $startDate);
 
         $conversionStats = $this->getAuditToVulnerabilityConversion($auditQuery);
         
         // Get questionnaire set breakdown
-        $questionnaireSetStats = $this->getQuestionnaireSetBreakdown($startDate, $userId);
+        $questionnaireSetStats = $this->getQuestionnaireSetBreakdown($startDate, $userId, $questionnaireSetId);
         
         // Get advanced questionnaire set analytics
-        $setPerformanceMetrics = $this->getQuestionnaireSetPerformanceMetrics($startDate, $userId);
-        $questionEffectivenessAnalysis = $this->getQuestionEffectivenessAnalysis($startDate, $userId);
-        $setToRiskCorrelation = $this->getSetToRiskCorrelation($startDate, $userId);
+        $setPerformanceMetrics = $this->getQuestionnaireSetPerformanceMetrics($startDate, $userId, $questionnaireSetId);
+        $questionEffectivenessAnalysis = $this->getQuestionEffectivenessAnalysis($startDate, $userId, $questionnaireSetId);
+        $setToRiskCorrelation = $this->getSetToRiskCorrelation($startDate, $userId, $questionnaireSetId);
 
         return [
             'type' => 'combined',
@@ -654,7 +662,7 @@ class AnalyticsController extends Controller
     /**
      * Get analytics breakdown by questionnaire set.
      */
-    private function getQuestionnaireSetBreakdown(Carbon $startDate, ?int $userId = null): array
+    private function getQuestionnaireSetBreakdown(Carbon $startDate, ?int $userId = null, ?int $questionnaireSetId = null): array
     {
         $query = AuditSubmission::query()
             ->where('created_at', '>=', $startDate)
@@ -665,6 +673,10 @@ class AnalyticsController extends Controller
         
         if ($userId) {
             $query->where('user_id', $userId);
+        }
+        
+        if ($questionnaireSetId) {
+            $query->where('questionnaire_set_id', $questionnaireSetId);
         }
 
         return $query->get()->map(function($item) {
@@ -681,7 +693,7 @@ class AnalyticsController extends Controller
      * Get questionnaire set performance metrics.
      * Shows: high-risk submissions, completion rates, avg review time, difficulty levels
      */
-    private function getQuestionnaireSetPerformanceMetrics(Carbon $startDate, ?int $userId = null): array
+    private function getQuestionnaireSetPerformanceMetrics(Carbon $startDate, ?int $userId = null, ?int $questionnaireSetId = null): array
     {
         $query = AuditSubmission::query()
             ->where('created_at', '>=', $startDate)
@@ -689,6 +701,10 @@ class AnalyticsController extends Controller
         
         if ($userId) {
             $query->where('user_id', $userId);
+        }
+        
+        if ($questionnaireSetId) {
+            $query->where('questionnaire_set_id', $questionnaireSetId);
         }
 
         $sets = $query->get()->groupBy('questionnaire_set_id');
@@ -738,13 +754,17 @@ class AnalyticsController extends Controller
      * Get question effectiveness analysis.
      * Shows: high-risk questions per set, vulnerability triggers, answer distributions, problematic questions
      */
-    private function getQuestionEffectivenessAnalysis(Carbon $startDate, ?int $userId = null): array
+    private function getQuestionEffectivenessAnalysis(Carbon $startDate, ?int $userId = null, ?int $questionnaireSetId = null): array
     {
         $submissionQuery = AuditSubmission::query()
             ->where('created_at', '>=', $startDate);
         
         if ($userId) {
             $submissionQuery->where('user_id', $userId);
+        }
+        
+        if ($questionnaireSetId) {
+            $submissionQuery->where('questionnaire_set_id', $questionnaireSetId);
         }
 
         $submissionIds = $submissionQuery->pluck('id');
@@ -808,7 +828,7 @@ class AnalyticsController extends Controller
      * Get set-to-risk correlation analysis.
      * Shows: risk distribution comparison across sets, heatmap data, admin overrides by set
      */
-    private function getSetToRiskCorrelation(Carbon $startDate, ?int $userId = null): array
+    private function getSetToRiskCorrelation(Carbon $startDate, ?int $userId = null, ?int $questionnaireSetId = null): array
     {
         $submissionQuery = AuditSubmission::query()
             ->where('created_at', '>=', $startDate)
@@ -816,6 +836,10 @@ class AnalyticsController extends Controller
         
         if ($userId) {
             $submissionQuery->where('user_id', $userId);
+        }
+        
+        if ($questionnaireSetId) {
+            $submissionQuery->where('questionnaire_set_id', $questionnaireSetId);
         }
 
         $submissions = $submissionQuery->get();
