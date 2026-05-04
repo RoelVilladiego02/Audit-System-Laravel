@@ -820,7 +820,9 @@ class AnalyticsController extends Controller
                         $q->where('admin_risk_level', 'high')
                           ->orWhere('system_risk_level', 'high');
                     })
-                    ->distinct('audit_question_id')
+                    ->distinct()
+                    ->pluck('audit_question_id')
+                    ->unique()
                     ->count();
 
                 return [
