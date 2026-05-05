@@ -30,20 +30,74 @@ class AuditAnswerImageController extends Controller
     public function uploadProofImage(Request $request, int $answer): JsonResponse
     {
         try {
-            // 📊 DEBUG: Log what was received
-            Log::debug('Image upload request received', [
-                'answer_id' => $answer,
+            // 📊 DEBUG: Comprehensive logging BEFORE validation
+            Log::debug('========== IMAGE UPLOAD REQUEST START ==========', [
+                'timestamp' => now(),
+                'answer_id_requested' => $answer,
+                'user_id' => auth()->id(),
                 'request_method' => $request->method(),
+                'request_url' => $request->url(),
+                'request_path' => $request->path(),
+            ]);
+            
+            Log::debug('REQUEST HEADERS:', [
                 'content_type' => $request->header('Content-Type'),
-                'has_file' => $request->hasFile('proof_image'),
-                'file_size' => $request->file('proof_image')?->getSize(),
-                'file_name' => $request->file('proof_image')?->getClientOriginalName(),
-                'all_request_data' => $request->all(),
-                'user_id' => auth()->id()
+                'authorization' => $request->header('Authorization') ? 'Bearer ' . substr($request->header('Authorization'), 7, 20) . '...' : 'MISSING',
+                'accept' => $request->header('Accept'),
+                'all_headers' => array_filter($request->headers->all(), fn($k) => !in_array($k, ['authorization']), ARRAY_FILTER_USE_KEY),
             ]);
 
-            $request->validate([
+            Log::debug('REQUEST FILES & DATA:', [
+                'has_files' => count($request->allFiles()) > 0,
+                'files_keys' => array_keys($request->allFiles()),
+                'has_proof_image' => $request->hasFile('proof_image'),
+                'file_details' => $request->file('proof_image') ? [
+                    'name' => $request->file('proof_image')->getClientOriginalName(),
+                    'type' => $request->file('proof_image')->getMimeType(),
+                    'size' => $request->file('proof_image')->getSize(),
+                    'temp_path' => $request->file('proof_image')->getRealPath(),
+                    'is_valid' => $request->file('proof_image')->isValid(),
+                    'error' => $request->file('proof_image')->getError(),
+                ] : 'NO FILE',
+                'all_input_keys' => array_keys($request->all()),
+                'input_data_sample' => array_slice($request->all(), 0, 5),
+            ]);
+
+            Log::debug('DATABASE CHECK BEFORE VALIDATION:', [
+                'total_audit_answers' => AuditAnswer::count(),
+                'answers_for_user' => AuditAnswer::whereHas('auditSubmission', fn($q) => 
+                    $q->where('user_id', auth()->id())
+                )->count(),
+                'answer_1005_exists' => AuditAnswer::where('id', 1005)->exists(),
+                'answer_1005_details' => AuditAnswer::find(1005) ? [
+                    'id' => 1005,
+                    'submission_id' => AuditAnswer::find(1005)->audit_submission_id,
+                    'question_id' => AuditAnswer::find(1005)->audit_question_id,
+                ] : null,
+            ]);
+
+            // Validate file is present and valid BEFORE validation rules
+            if (!$request->hasFile('proof_image')) {
+                Log::warning('NO FILE UPLOADED - validation will fail', [
+                    'answer_id' => $answer,
+                    'has_file' => false,
+                    'all_files' => array_keys($request->allFiles()),
+                ]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No file was uploaded. Please select a file and try again.',
+                    'debug' => 'proof_image field is empty'
+                ], 422);
+            }
+
+            // Now run standard validation
+            $validated = $request->validate([
                 'proof_image' => 'required|file|mimes:jpeg,png,jpg,gif,bmp,webp,pdf|max:10240'
+            ]);
+
+            Log::debug('VALIDATION PASSED - Looking for answer:', [
+                'answer_id' => $answer,
+                'validated_file_name' => $validated['proof_image']->getClientOriginalName(),
             ]);
 
             $auditAnswer = AuditAnswer::findOrFail($answer);
@@ -71,24 +125,31 @@ class AuditAnswerImageController extends Controller
             
             return response()->json($result, $statusCode);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-            Log::warning('Audit answer not found for image upload', [
-                'answer_id' => $answer,
+            Log::warning('========== MODEL NOT FOUND ==========', [
+                'answer_id_requested' => $answer,
                 'user_id' => auth()->id(),
-                'total_answers' => AuditAnswer::count(),
+                'exception_type' => class_basename($e),
+                'exception_message' => $e->getMessage(),
+                'total_answers_in_db' => AuditAnswer::count(),
                 'user_submission_answers' => AuditAnswer::whereHas('auditSubmission', fn($q) => 
                     $q->where('user_id', auth()->id())
-                )->count()
+                )->count(),
+                'answer_1005_exists' => AuditAnswer::where('id', 1005)->exists(),
+                'all_answer_ids' => AuditAnswer::pluck('id')->toArray(),
             ]);
             return response()->json([
                 'success' => false,
                 'message' => 'Audit answer not found. This answer ID does not exist or may belong to a different submission. Please save your draft again and try uploading.'
             ], 404);
         } catch (\Exception $e) {
-            Log::error('Error uploading proof image', [
+            Log::error('========== ERROR UPLOADING PROOF IMAGE ==========', [
                 'answer_id' => $answer,
                 'user_id' => auth()->id(),
-                'error' => $e->getMessage(),
+                'exception_type' => class_basename($e),
+                'exception_message' => $e->getMessage(),
+                'file_line' => $e->getFile() . ':' . $e->getLine(),
                 'trace' => $e->getTraceAsString()
+            ]);
             ]);
             return response()->json([
                 'success' => false,
