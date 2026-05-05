@@ -10,6 +10,33 @@ use Illuminate\Database\Seeder;
 
 class AuditAnswerSeeder extends Seeder
 {
+    /**
+     * Array of valid proof image filenames for seeding "Yes" answers
+     * These follow the validation rules from config/proof_images.php
+     */
+    protected array $sampleProofImages = [
+        'firewall_config_2026.jpg',
+        'access_control_audit.png',
+        'mfa_configuration.pdf',
+        'network_backup.jpg',
+        'security_certificate.pdf',
+        'vulnerability_scan_report.jpg',
+        'antivirus_status_log.png',
+        'backup_verification.jpg',
+        'inventory_audit_2026.pdf',
+        'compliance_checklist.jpg',
+        'ssl_certificate_config.jpg',
+        'access_control_matrix.pdf',
+        'patch_management_log.jpg',
+        'encryption_audit.png',
+        'firewall_rules_backup.pdf',
+        'device_inventory_2026.jpg',
+        'audit_trail_screenshot.png',
+        'security_audit_report.pdf',
+        'monitoring_dashboard.jpg',
+        'incident_log_audit.jpg',
+    ];
+
     public function run(): void
     {
         $admin = User::where('role', 'admin')->first();
@@ -57,9 +84,30 @@ class AuditAnswerSeeder extends Seeder
                     'updated_at' => $submission->created_at,
                 ]);
 
+                // Add proof image for "Yes" answers (70% chance)
+                if (!$isCustomAnswer && strtolower(trim($answer)) === 'yes' && rand(1, 100) <= 70) {
+                    $proofImage = $this->sampleProofImages[array_rand($this->sampleProofImages)];
+                    $imagePath = 'proof-images/' . date('Y') . '/' . date('m') . '/' . date('d') . '/' . 
+                                 $auditAnswer->id . '/' . $proofImage;
+                    
+                    $auditAnswer->update([
+                        'proof_image_path' => $imagePath,
+                        'proof_image_name' => $proofImage,
+                        'proof_image_validated' => true, // Sample images are pre-validated
+                        'proof_image_validation_error' => null,
+                        'system_risk_level' => 'low' // Yes answer with valid image = low risk
+                    ]);
+                }
+
                 // If submission is completed, add review details
                 if ($submission->status === 'completed') {
                     $adminRiskLevel = $isCustomAnswer ? 'low' : $riskLevels[array_rand($riskLevels)];
+                    
+                    // Override admin risk if image was validated for "Yes" answers
+                    if (!$isCustomAnswer && strtolower(trim($answer)) === 'yes' && $auditAnswer->proof_image_validated) {
+                        $adminRiskLevel = 'low';
+                    }
+                    
                     $adminRecommendation = ($adminRiskLevel === 'high' && !empty($question->possible_recommendation))
                         ? $question->possible_recommendation
                         : fake()->paragraph();

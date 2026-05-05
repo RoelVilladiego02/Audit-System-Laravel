@@ -10,6 +10,7 @@ use App\Http\Controllers\VulnerabilitySubmissionController;
 use App\Http\Controllers\VulnerabilityController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\AnalyticsController;
+use App\Http\Controllers\AuditAnswerImageController;
 
 // Reduce header size by using shorter route names and grouping
 Route::post('/auth/register', [AuthController::class, 'register']);
@@ -120,10 +121,34 @@ Route::middleware('auth:sanctum')->group(function () {
             ->where('submission', '[0-9]+')
             ->name('update-title');
         
+        // Image statistics and management endpoints
+        Route::get('/{submission}/image-stats', [AuditAnswerImageController::class, 'getSubmissionImageStats'])
+            ->where('submission', '[0-9]+')
+            ->name('image-stats');
+        Route::get('/{submission}/answers-needing-images', [AuditAnswerImageController::class, 'getAnswersNeedingImages'])
+            ->where('submission', '[0-9]+')
+            ->name('answers-needing-images');
+        Route::post('/{submission}/revalidate-images', [AuditAnswerImageController::class, 'revalidateSubmissionImages'])
+            ->where('submission', '[0-9]+')
+            ->name('revalidate-images');
+        
         // Draft functionality routes
         Route::post('/save-draft', [AuditSubmissionController::class, 'saveDraft'])->name('save-draft');
         Route::patch('/{submission}/draft', [AuditSubmissionController::class, 'updateDraft'])->name('update-draft');
         Route::patch('/{submission}/submit', [AuditSubmissionController::class, 'submitDraft'])->name('submit-draft');
+    });
+
+    // Proof image upload routes for individual answers
+    Route::prefix('audit-answers')->name('audit-answers.')->group(function () {
+        Route::post('/{answer}/proof-image', [AuditAnswerImageController::class, 'uploadProofImage'])
+            ->where('answer', '[0-9]+')
+            ->name('upload-proof-image');
+        Route::delete('/{answer}/proof-image', [AuditAnswerImageController::class, 'deleteProofImage'])
+            ->where('answer', '[0-9]+')
+            ->name('delete-proof-image');
+        Route::get('/{answer}/proof-image/url', [AuditAnswerImageController::class, 'getProofImageUrl'])
+            ->where('answer', '[0-9]+')
+            ->name('proof-image-url');
     });
 
     Route::prefix('vulnerability-submissions')->name('vulnerability-submissions.')->group(function () {

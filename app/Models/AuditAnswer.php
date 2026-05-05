@@ -21,6 +21,10 @@ class AuditAnswer extends Model
         'recommendation',
         'status',
         'is_custom_answer',
+        'proof_image_path',
+        'proof_image_name',
+        'proof_image_validated',
+        'proof_image_validation_error',
     ];
 
     protected $casts = [
@@ -32,6 +36,7 @@ class AuditAnswer extends Model
         'updated_at' => 'datetime',
         'reviewed_at' => 'datetime',
         'is_custom_answer' => 'boolean',
+        'proof_image_validated' => 'boolean',
     ];
 
     public function auditSubmission(): BelongsTo
@@ -94,6 +99,29 @@ class AuditAnswer extends Model
 
         // For regular answers, use the selected answer for risk assessment
         $answerToCheck = $this->selected_answer ?? $this->answer;
+        
+        // Special handling for "Yes" answers with proof image requirement
+        if (strtolower(trim($answerToCheck)) === 'yes') {
+            if ($this->requiresProofImage()) {
+                if (!$this->isAnswerValid()) {
+                    // "Yes" answer without valid proof image should not pass validation
+                    Log::warning('Yes answer failed proof image validation', [
+                        'answer_id' => $this->id,
+                        'has_image' => $this->hasProofImage(),
+                        'image_validated' => $this->proof_image_validated,
+                        'validation_error' => $this->proof_image_validation_error
+                    ]);
+                    // Return high risk if image is required but not valid
+                    return 'high';
+                }
+                // If "yes" with valid proof image, it's low risk
+                Log::info('Yes answer with valid proof image - low risk', [
+                    'answer_id' => $this->id,
+                    'image_name' => $this->proof_image_name
+                ]);
+                return 'low';
+            }
+        }
         
         // Match answer against risk criteria
         foreach (['high', 'medium', 'low'] as $level) {
@@ -189,7 +217,272 @@ class AuditAnswer extends Model
         return $result;
     }
 
+    /**
+     * Check if this answer requires a proof image
+     * Images are required for "Yes" answers only
+     */
+    public function requiresProofImage(): bool
+    {
+        // Normalize answer for comparison
+        $answer = strtolower(trim($this->answer));
+        return $answer === 'yes';
+    }
+
+    /**
+     * Check if a proof image has been uploaded
+     */
+    public function hasProofImage(): bool
+    {
+        return !empty($this->proof_image_path) && !empty($this->proof_image_name);
+    }
+
+    /**
+     * Check if proof image upload is missing when required
+     */
+    public function isProofImageMissing(): bool
+    {
+        return $this->requiresProofImage() && !$this->hasProofImage();
+    }
+
+    /**
+     * Validate the proof image based on filename
+     * The filename should be meaningful and match expected patterns
+     * Validation is based on config/proof_images.php configuration
+     * 
+     * @param string $filename The original filename of the uploaded image
+     * @return array ['valid' => bool, 'message' => string]
+     */
+    public function validateProofImageName(string $filename): array
+    {
+        $config = config('proof_images', []);
+        $validationMode = $config['validation_mode'] ?? 'blacklist';
+        $minLength = $config['min_filename_length'] ?? 3;
+        $useKeywords = $config['use_required_keywords'] ?? false;
+        $keywords = $config['required_keywords'] ?? [];
+
+        if (empty(trim($filename))) {
+            return [
+                'valid' => false,
+                'message' => $config['messages']['empty_filename'] ?? 'Image filename cannot be empty.'
+            ];
+        }
+
+        // Extract filename without path
+        $filename = basename($filename);
+        
+        // Get filename without extension
+        $nameWithoutExt = pathinfo($filename, PATHINFO_FILENAME);
+        
+        // Check if filename is too short
+        if (strlen($nameWithoutExt) < $minLength) {
+            return [
+                'valid' => false,
+                'message' => $config['messages']['too_short'] ?? "Image filename is too short. Use descriptive names (at least {$minLength} characters)."
+            ];
+        }
+
+        // Check file extension
+        $allowedExtensions = $config['allowed_extensions'] ?? ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'pdf'];
+        $extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+        
+        if (!in_array($extension, $allowedExtensions)) {
+            return [
+                'valid' => false,
+                'message' => str_replace(':extensions', implode(', ', $allowedExtensions), 
+                    $config['messages']['invalid_extension'] ?? 'Invalid file extension.')
+            ];
+        }
+
+        // Apply validation mode
+        if ($validationMode === 'whitelist' || $validationMode === 'combined') {
+            $whitelist = $config['whitelist'] ?? [];
+            $whitelistMatch = false;
+
+            foreach ($whitelist as $pattern) {
+                if (preg_match($pattern, $filename)) {
+                    $whitelistMatch = true;
+                    break;
+                }
+            }
+
+            if (!$whitelistMatch && $validationMode === 'whitelist') {
+                Log::warning('Filename failed whitelist validation', [
+                    'answer_id' => $this->id,
+                    'filename' => $filename
+                ]);
+                return [
+                    'valid' => false,
+                    'message' => $config['messages']['whitelist_fail'] ?? 
+                        'Image filename does not match required naming patterns.'
+                ];
+            }
+
+            if ($validationMode === 'combined' && !$whitelistMatch) {
+                // Continue to blacklist check
+                $validationMode = 'blacklist';
+            }
+        }
+
+        // Apply blacklist validation
+        if ($validationMode === 'blacklist' || $validationMode === 'combined') {
+            $blacklist = $config['blacklist'] ?? [];
+
+            foreach ($blacklist as $pattern) {
+                if (preg_match($pattern, $filename)) {
+                    Log::warning('Filename matched blacklist pattern', [
+                        'answer_id' => $this->id,
+                        'filename' => $filename,
+                        'pattern' => $pattern
+                    ]);
+                    return [
+                        'valid' => false,
+                        'message' => $config['messages']['generic_name'] ?? 
+                            'Image filename appears to be generic or placeholder. Please use a descriptive name.'
+                    ];
+                }
+            }
+        }
+
+        // Check if keywords are required
+        if ($useKeywords && !empty($keywords)) {
+            $keywordMatch = false;
+            $lowerFilename = strtolower($nameWithoutExt);
+
+            foreach ($keywords as $keyword) {
+                if (stripos($lowerFilename, $keyword) !== false) {
+                    $keywordMatch = true;
+                    break;
+                }
+            }
+
+            if (!$keywordMatch) {
+                Log::warning('Filename missing required keywords', [
+                    'answer_id' => $this->id,
+                    'filename' => $filename,
+                    'keywords' => $keywords
+                ]);
+                return [
+                    'valid' => false,
+                    'message' => 'Image filename must contain at least one relevant keyword (e.g., firewall, access, config, audit).'
+                ];
+            }
+        }
+
+        // If we reach here, filename is valid
+        Log::info('Proof image filename validated successfully', [
+            'answer_id' => $this->id,
+            'filename' => $filename,
+            'filename_without_ext' => $nameWithoutExt,
+            'validation_mode' => $validationMode
+        ]);
+
+        return [
+            'valid' => true,
+            'message' => $config['messages']['success'] ?? 'Image filename is valid and descriptive.'
+        ];
+    }
+
+    /**
+     * Store proof image and validate it
+     * 
+     * @param string $imagePath Path where image is stored
+     * @param string $imageName Original filename
+     * @return bool Whether the image passed validation
+     */
+    public function storeProofImage(string $imagePath, string $imageName): bool
+    {
+        // If answer doesn't require image, accept it anyway
+        if (!$this->requiresProofImage()) {
+            Log::info('Proof image provided for non-yes answer', [
+                'answer_id' => $this->id,
+                'answer' => $this->answer
+            ]);
+            $this->update([
+                'proof_image_path' => $imagePath,
+                'proof_image_name' => $imageName,
+                'proof_image_validated' => true,
+                'proof_image_validation_error' => null
+            ]);
+            return true;
+        }
+
+        // Validate the image name
+        $validation = $this->validateProofImageName($imageName);
+        
+        $this->update([
+            'proof_image_path' => $imagePath,
+            'proof_image_name' => $imageName,
+            'proof_image_validated' => $validation['valid'],
+            'proof_image_validation_error' => !$validation['valid'] ? $validation['message'] : null
+        ]);
+
+        Log::info('Proof image stored', [
+            'answer_id' => $this->id,
+            'image_path' => $imagePath,
+            'image_name' => $imageName,
+            'validated' => $validation['valid']
+        ]);
+
+        return $validation['valid'];
+    }
+
+    /**
+     * Check if the answer is valid considering proof image requirements
+     * 
+     * For "yes" answers: Valid only if proof image is provided AND validated
+     * For "no" answers: Always valid (no image required)
+     * 
+     * @return bool
+     */
+    public function isAnswerValid(): bool
+    {
+        // For "no" answers or other non-yes answers, always valid
+        if (!$this->requiresProofImage()) {
+            return true;
+        }
+
+        // For "yes" answers, must have a validated image
+        if (!$this->hasProofImage()) {
+            Log::warning('Yes answer missing proof image', [
+                'answer_id' => $this->id
+            ]);
+            return false;
+        }
+
+        // Image must be validated
+        if (!$this->proof_image_validated) {
+            Log::warning('Yes answer has unvalidated proof image', [
+                'answer_id' => $this->id,
+                'validation_error' => $this->proof_image_validation_error
+            ]);
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Get validation status message
+     */
+    public function getProofImageValidationStatus(): string
+    {
+        if (!$this->requiresProofImage()) {
+            return 'No image required for this answer.';
+        }
+
+        if (!$this->hasProofImage()) {
+            return 'Proof image is missing. "Yes" answers require uploaded proof.';
+        }
+
+        if (!$this->proof_image_validated) {
+            return $this->proof_image_validation_error ?? 'Proof image failed validation.';
+        }
+
+        return 'Proof image validated successfully.';
+    }
+
     // Scopes
+
     public function scopePendingReview($query)
     {
         return $query->where(function($q) {
@@ -258,5 +551,57 @@ class AuditAnswer extends Model
                        ->where('system_risk_level', 'low');
               });
         });
+    }
+
+    /**
+     * Scope to filter answers requiring proof images (yes answers)
+     */
+    public function scopeRequiresProofImage($query)
+    {
+        return $query->whereRaw("LOWER(TRIM(answer)) = 'yes'")
+                    ->orWhereRaw("LOWER(TRIM(selected_answer)) = 'yes'");
+    }
+
+    /**
+     * Scope to filter answers with uploaded proof images
+     */
+    public function scopeWithProofImage($query)
+    {
+        return $query->whereNotNull('proof_image_path')
+                    ->whereNotNull('proof_image_name');
+    }
+
+    /**
+     * Scope to filter answers with validated proof images
+     */
+    public function scopeWithValidatedProofImage($query)
+    {
+        return $query->where('proof_image_validated', true);
+    }
+
+    /**
+     * Scope to filter answers with invalid or missing proof images
+     */
+    public function scopeWithInvalidProofImage($query)
+    {
+        return $query->where(function($q) {
+            $q->where(function($subQ) {
+                    $subQ->whereRaw("LOWER(TRIM(answer)) = 'yes'")
+                        ->orWhereRaw("LOWER(TRIM(selected_answer)) = 'yes'");
+                })
+                ->where(function($subQ) {
+                    $subQ->whereNull('proof_image_path')
+                        ->orWhere('proof_image_validated', false);
+                });
+        });
+    }
+
+    /**
+     * Scope to filter answers without uploaded proof images
+     */
+    public function scopeWithoutProofImage($query)
+    {
+        return $query->whereNull('proof_image_path')
+                    ->orWhereNull('proof_image_name');
     }
 }

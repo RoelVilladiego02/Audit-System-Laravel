@@ -23,11 +23,19 @@ return new class extends Migration
             $table->enum('status', ['pending', 'reviewed'])->default('pending');
             $table->boolean('is_custom_answer')->default(false);
             $table->string('selected_answer')->nullable(); // Store what was actually selected (e.g., "Others")
+            
+            // Proof image fields for "yes" answer validation
+            $table->string('proof_image_path')->nullable(); // Storage path to the uploaded image
+            $table->string('proof_image_name')->nullable(); // Original filename provided by user
+            $table->boolean('proof_image_validated')->default(false); // Whether image passed filename validation
+            $table->text('proof_image_validation_error')->nullable(); // Validation error message if applicable
+            
             $table->timestamps();
 
             // Add indexes
             $table->index('audit_submission_id'); // Index for better performance
             $table->index('is_custom_answer'); // Index for custom answer queries
+            $table->index('proof_image_validated'); // Index for proof image validation queries
         });
     }
 
