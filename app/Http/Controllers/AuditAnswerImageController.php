@@ -30,6 +30,18 @@ class AuditAnswerImageController extends Controller
     public function uploadProofImage(Request $request, int $answer): JsonResponse
     {
         try {
+            // 📊 DEBUG: Log what was received
+            Log::debug('Image upload request received', [
+                'answer_id' => $answer,
+                'request_method' => $request->method(),
+                'content_type' => $request->header('Content-Type'),
+                'has_file' => $request->hasFile('proof_image'),
+                'file_size' => $request->file('proof_image')?->getSize(),
+                'file_name' => $request->file('proof_image')?->getClientOriginalName(),
+                'all_request_data' => $request->all(),
+                'user_id' => auth()->id()
+            ]);
+
             $request->validate([
                 'proof_image' => 'required|file|mimes:jpeg,png,jpg,gif,bmp,webp,pdf|max:10240'
             ]);
