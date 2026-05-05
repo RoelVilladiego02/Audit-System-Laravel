@@ -149,6 +149,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/{answer}/proof-image/url', [AuditAnswerImageController::class, 'getProofImageUrl'])
             ->where('answer', '[0-9]+')
             ->name('proof-image-url');
+        Route::get('/{answer}/validate-ownership', [AuditAnswerImageController::class, 'validateAnswerOwnership'])
+            ->where('answer', '[0-9]+')
+            ->name('validate-ownership');
     });
 
     Route::prefix('vulnerability-submissions')->name('vulnerability-submissions.')->group(function () {

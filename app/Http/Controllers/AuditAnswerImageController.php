@@ -38,9 +38,14 @@ class AuditAnswerImageController extends Controller
             
             // Authorization check - user can only upload for their own submissions
             if (!$this->authorizeForAnswer($auditAnswer)) {
+                Log::warning('Unauthorized image upload attempt', [
+                    'answer_id' => $answer,
+                    'user_id' => auth()->id(),
+                    'submission_user_id' => $auditAnswer->auditSubmission?->user_id
+                ]);
                 return response()->json([
                     'success' => false,
-                    'message' => 'Unauthorized to upload proof for this answer.'
+                    'message' => 'You do not have permission to upload proof for this answer. Make sure you\'re working on your own submission.'
                 ], 403);
             }
 
@@ -56,20 +61,26 @@ class AuditAnswerImageController extends Controller
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             Log::warning('Audit answer not found for image upload', [
                 'answer_id' => $answer,
-                'user_id' => auth()->id()
+                'user_id' => auth()->id(),
+                'total_answers' => AuditAnswer::count(),
+                'user_submission_answers' => AuditAnswer::whereHas('auditSubmission', fn($q) => 
+                    $q->where('user_id', auth()->id())
+                )->count()
             ]);
             return response()->json([
                 'success' => false,
-                'message' => 'Audit answer not found.'
+                'message' => 'Audit answer not found. This answer ID does not exist or may belong to a different submission. Please save your draft again and try uploading.'
             ], 404);
         } catch (\Exception $e) {
             Log::error('Error uploading proof image', [
                 'answer_id' => $answer,
-                'error' => $e->getMessage()
+                'user_id' => auth()->id(),
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
             ]);
             return response()->json([
                 'success' => false,
-                'message' => 'An error occurred while uploading the image.'
+                'message' => 'An error occurred while uploading the image. Please try again.'
             ], 500);
         }
     }
@@ -322,6 +333,54 @@ class AuditAnswerImageController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'An error occurred while retrieving answers.'
+            ], 500);
+        }
+    }
+
+    /**
+     * Validate that an answer exists and belongs to the current user's submission
+     * GET /api/audit-answers/{answer}/validate-ownership
+     * 
+     * @param int $answer Answer ID
+     * @return JsonResponse
+     */
+    public function validateAnswerOwnership(int $answer): JsonResponse
+    {
+        try {
+            $auditAnswer = AuditAnswer::find($answer);
+            
+            if (!$auditAnswer) {
+                return response()->json([
+                    'success' => false,
+                    'valid' => false,
+                    'message' => 'Answer does not exist'
+                ]);
+            }
+
+            if (!$this->authorizeForAnswer($auditAnswer)) {
+                return response()->json([
+                    'success' => false,
+                    'valid' => false,
+                    'message' => 'Answer does not belong to your submission'
+                ]);
+            }
+
+            return response()->json([
+                'success' => true,
+                'valid' => true,
+                'answer_id' => $auditAnswer->id,
+                'question_id' => $auditAnswer->audit_question_id,
+                'submission_id' => $auditAnswer->audit_submission_id,
+                'question_text' => $auditAnswer->auditQuestion?->question ?? 'Unknown'
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error validating answer ownership', [
+                'answer_id' => $answer,
+                'error' => $e->getMessage()
+            ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'An error occurred while validating the answer.'
             ], 500);
         }
     }
