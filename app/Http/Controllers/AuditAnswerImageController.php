@@ -150,7 +150,6 @@ class AuditAnswerImageController extends Controller
                 'file_line' => $e->getFile() . ':' . $e->getLine(),
                 'trace' => $e->getTraceAsString()
             ]);
-            ]);
             return response()->json([
                 'success' => false,
                 'message' => 'An error occurred while uploading the image. Please try again.'

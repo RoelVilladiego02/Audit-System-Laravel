@@ -41,32 +41,71 @@ class ProofImageService
     public function uploadProofImage(AuditAnswer $answer, UploadedFile $file): array
     {
         try {
+            Log::debug('ProofImageService.uploadProofImage START', [
+                'answer_id' => $answer->id,
+                'file_name' => $file->getClientOriginalName(),
+                'file_type' => $file->getMimeType(),
+                'file_size' => $file->getSize(),
+                'is_valid' => $file->isValid(),
+                'error_code' => $file->getError(),
+            ]);
+
             // Validate file
             $validation = $this->validateFile($file);
             if (!$validation['valid']) {
+                Log::warning('File validation failed', [
+                    'answer_id' => $answer->id,
+                    'file_name' => $file->getClientOriginalName(),
+                    'validation_error' => $validation['message']
+                ]);
                 return [
                     'success' => false,
                     'message' => $validation['message']
                 ];
             }
 
+            Log::debug('File validation passed', [
+                'answer_id' => $answer->id,
+                'file_name' => $file->getClientOriginalName(),
+            ]);
+
             // Store the file
             $filename = $file->getClientOriginalName();
             $path = $this->storeFile($file, $answer->id);
 
             if (!$path) {
+                Log::error('Failed to store file - storeFile returned falsy', [
+                    'answer_id' => $answer->id,
+                    'file_name' => $filename,
+                ]);
                 throw new Exception('Failed to store file');
             }
 
-            // Store proof image in database with validation
-            $isValid = $answer->storeProofImage($path, $filename);
-
-            Log::info('Proof image uploaded', [
+            Log::debug('File stored successfully', [
                 'answer_id' => $answer->id,
-                'filename' => $filename,
+                'file_name' => $filename,
                 'path' => $path,
-                'validated' => $isValid
             ]);
+
+            // Store proof image in database with validation
+            try {
+                $isValid = $answer->storeProofImage($path, $filename);
+                
+                Log::info('Proof image stored in database', [
+                    'answer_id' => $answer->id,
+                    'filename' => $filename,
+                    'path' => $path,
+                    'validated' => $isValid
+                ]);
+            } catch (Exception $updateError) {
+                Log::error('Failed to update answer record with proof image', [
+                    'answer_id' => $answer->id,
+                    'file_name' => $filename,
+                    'error' => $updateError->getMessage(),
+                    'trace' => $updateError->getTraceAsString()
+                ]);
+                throw $updateError;
+            }
 
             return [
                 'success' => $isValid,
@@ -80,9 +119,13 @@ class ProofImageService
                 ]
             ];
         } catch (Exception $e) {
-            Log::error('Error uploading proof image', [
+            Log::error('CRITICAL: Error uploading proof image', [
                 'answer_id' => $answer->id,
-                'error' => $e->getMessage()
+                'error_message' => $e->getMessage(),
+                'error_class' => get_class($e),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
             ]);
 
             return [
@@ -100,31 +143,86 @@ class ProofImageService
      */
     protected function validateFile(UploadedFile $file): array
     {
-        $maxSize = $this->config['max_file_size_kb'] ?? 10240;
-        
-        // Check file size
-        if ($file->getSize() > $maxSize * 1024) {
+        try {
+            if (!$file->isValid()) {
+                $errorCode = $file->getError();
+                $errorMap = [
+                    UPLOAD_ERR_INI_SIZE => 'The uploaded file exceeds the upload_max_filesize directive.',
+                    UPLOAD_ERR_FORM_SIZE => 'The uploaded file exceeds the MAX_FILE_SIZE directive.',
+                    UPLOAD_ERR_PARTIAL => 'The uploaded file was only partially uploaded.',
+                    UPLOAD_ERR_NO_FILE => 'No file was uploaded.',
+                    UPLOAD_ERR_NO_TMP_DIR => 'Missing a temporary folder.',
+                    UPLOAD_ERR_CANT_WRITE => 'Failed to write file to disk.',
+                    UPLOAD_ERR_EXTENSION => 'A PHP extension stopped the file upload.',
+                ];
+                $message = $errorMap[$errorCode] ?? "Upload error code: $errorCode";
+                
+                Log::warning('Upload validation failed - file invalid', [
+                    'file_name' => $file->getClientOriginalName(),
+                    'error_code' => $errorCode,
+                    'error_message' => $message,
+                ]);
+                
+                return [
+                    'valid' => false,
+                    'message' => $message
+                ];
+            }
+
+            $maxSize = $this->config['max_file_size_kb'] ?? 10240;
+            
+            // Check file size
+            $fileSize = $file->getSize();
+            $maxSizeBytes = $maxSize * 1024;
+            if ($fileSize > $maxSizeBytes) {
+                $message = "File size ({$fileSize} bytes) exceeds maximum ({$maxSizeBytes} bytes / {$maxSize} KB)";
+                Log::warning('File size validation failed', [
+                    'file_name' => $file->getClientOriginalName(),
+                    'file_size' => $fileSize,
+                    'max_size' => $maxSizeBytes,
+                ]);
+                return [
+                    'valid' => false,
+                    'message' => str_replace(':max_size', $maxSize, $this->getMessage('file_too_large'))
+                ];
+            }
+
+            // Check file extension
+            $allowedExtensions = $this->config['allowed_extensions'] ?? ['jpg', 'jpeg', 'png', 'pdf'];
+            $extension = strtolower($file->getClientOriginalExtension());
+            
+            if (!in_array($extension, $allowedExtensions)) {
+                Log::warning('File extension validation failed', [
+                    'file_name' => $file->getClientOriginalName(),
+                    'extension' => $extension,
+                    'allowed' => $allowedExtensions,
+                ]);
+                return [
+                    'valid' => false,
+                    'message' => str_replace(':extensions', implode(', ', $allowedExtensions), $this->getMessage('invalid_extension'))
+                ];
+            }
+
+            Log::debug('File validation passed', [
+                'file_name' => $file->getClientOriginalName(),
+                'extension' => $extension,
+                'size' => $fileSize,
+            ]);
+
+            return [
+                'valid' => true,
+                'message' => $this->getMessage('success')
+            ];
+        } catch (Exception $e) {
+            Log::error('Exception during file validation', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
             return [
                 'valid' => false,
-                'message' => str_replace(':max_size', $maxSize, $this->getMessage('file_too_large'))
+                'message' => 'Error validating file: ' . $e->getMessage()
             ];
         }
-
-        // Check file extension
-        $allowedExtensions = $this->config['allowed_extensions'] ?? ['jpg', 'jpeg', 'png', 'pdf'];
-        $extension = strtolower($file->getClientOriginalExtension());
-        
-        if (!in_array($extension, $allowedExtensions)) {
-            return [
-                'valid' => false,
-                'message' => str_replace(':extensions', implode(', ', $allowedExtensions), $this->getMessage('invalid_extension'))
-            ];
-        }
-
-        return [
-            'valid' => true,
-            'message' => $this->getMessage('success')
-        ];
     }
 
     /**
@@ -137,6 +235,15 @@ class ProofImageService
     protected function storeFile(UploadedFile $file, int $answerId): string|bool
     {
         try {
+            if (!$file->isValid()) {
+                Log::warning('File is not valid', [
+                    'answer_id' => $answerId,
+                    'error' => $file->getError(),
+                    'file_name' => $file->getClientOriginalName(),
+                ]);
+                return false;
+            }
+
             $filename = $file->getClientOriginalName();
             
             // Create directory structure: proof-images/{year}/{month}/{day}/{answer_id}/
@@ -146,17 +253,41 @@ class ProofImageService
                 date('d') . '/' . 
                 $answerId;
 
+            Log::debug('Storing file', [
+                'answer_id' => $answerId,
+                'filename' => $filename,
+                'storage_path' => $storagePath,
+                'disk' => $this->disk,
+            ]);
+
             $path = Storage::disk($this->disk)->putFileAs(
                 $storagePath,
                 $file,
                 $filename
             );
 
+            if (!$path) {
+                Log::error('Storage::putFileAs returned null/false', [
+                    'answer_id' => $answerId,
+                    'filename' => $filename,
+                    'storage_path' => $storagePath,
+                ]);
+                return false;
+            }
+
+            Log::debug('File stored successfully', [
+                'answer_id' => $answerId,
+                'filename' => $filename,
+                'stored_path' => $path,
+            ]);
+
             return $path;
         } catch (Exception $e) {
-            Log::error('Error storing file', [
+            Log::error('Exception in storeFile', [
                 'answer_id' => $answerId,
-                'error' => $e->getMessage()
+                'error_message' => $e->getMessage(),
+                'error_class' => get_class($e),
+                'trace' => $e->getTraceAsString()
             ]);
             return false;
         }
