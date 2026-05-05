@@ -22,6 +22,7 @@ class CustomCsrfMiddleware
         $excludedRoutes = [
             'api/auth/*',
             'api/audit-submissions*',
+            'api/audit-answers*',
             'api/vulnerability-submissions*',
             'api/audit-questions*',
             'api/questionnaire-sets*',
