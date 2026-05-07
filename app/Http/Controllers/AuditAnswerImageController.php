@@ -211,16 +211,16 @@ class AuditAnswerImageController extends Controller
      * POST /api/audit-answers/{answer}/proof-image
      * 
      * @param Request $request
-     * @param int $answer Answer ID
+     * @param AuditAnswer $answer The audit answer model (injected via route binding)
      * @return JsonResponse
      */
-    public function uploadProofImage(Request $request, int $answer): JsonResponse
+    public function uploadProofImage(Request $request, AuditAnswer $answer): JsonResponse
     {
         try {
             // 📊 DEBUG: Comprehensive logging BEFORE validation
             Log::debug('========== IMAGE UPLOAD REQUEST START ==========', [
                 'timestamp' => now(),
-                'answer_id_requested' => $answer,
+                'answer_id_requested' => $answer->id,
                 'user_id' => auth()->id(),
                 'request_method' => $request->method(),
                 'request_url' => $request->url(),
@@ -277,27 +277,29 @@ class AuditAnswerImageController extends Controller
             ]);
 
             Log::debug('VALIDATION PASSED - Looking for answer:', [
-                'answer_id' => $answer,
+                'answer_id' => $answer->id,
                 'validated_file_name' => $validated['proof_image']->getClientOriginalName(),
             ]);
 
-            // ✅ CRITICAL: Load answer WITH submission relationship to avoid lazy loading issues
-            $auditAnswer = AuditAnswer::with('auditSubmission')->findOrFail($answer);
+            // ✅ Ensure submission relationship is loaded (route binding provides the model)
+            if (!$answer->relationLoaded('auditSubmission')) {
+                $answer->load('auditSubmission');
+            }
             
             Log::debug('Answer found and loaded:', [
-                'answer_id' => $auditAnswer->id,
-                'submission_id' => $auditAnswer->audit_submission_id,
-                'has_submission_relation' => $auditAnswer->auditSubmission !== null,
-                'submission_user_id' => $auditAnswer->auditSubmission?->user_id,
+                'answer_id' => $answer->id,
+                'submission_id' => $answer->audit_submission_id,
+                'has_submission_relation' => $answer->auditSubmission !== null,
+                'submission_user_id' => $answer->auditSubmission?->user_id,
                 'current_user_id' => auth()->id(),
             ]);
             
             // Authorization check - user can only upload for their own submissions
-            if (!$this->authorizeForAnswer($auditAnswer)) {
+            if (!$this->authorizeForAnswer($answer)) {
                 Log::warning('Unauthorized image upload attempt', [
-                    'answer_id' => $answer,
+                    'answer_id' => $answer->id,
                     'user_id' => auth()->id(),
-                    'submission_user_id' => $auditAnswer->auditSubmission?->user_id
+                    'submission_user_id' => $answer->auditSubmission?->user_id
                 ]);
                 return response()->json([
                     'success' => false,
@@ -307,7 +309,7 @@ class AuditAnswerImageController extends Controller
 
             // Upload and validate the image
             $result = $this->imageService->uploadProofImage(
-                $auditAnswer,
+                $answer,
                 $request->file('proof_image')
             );
 
@@ -316,7 +318,7 @@ class AuditAnswerImageController extends Controller
             return response()->json($result, $statusCode);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             Log::warning('========== MODEL NOT FOUND ==========', [
-                'answer_id_requested' => $answer,
+                'answer_id_requested' => $answer->id,
                 'user_id' => auth()->id(),
                 'exception_type' => class_basename($e),
                 'exception_message' => $e->getMessage(),
@@ -382,16 +384,14 @@ class AuditAnswerImageController extends Controller
      * Delete a proof image for an audit answer
      * DELETE /api/audit-answers/{answer}/proof-image
      * 
-     * @param int $answer Answer ID
+     * @param AuditAnswer $answer The audit answer model (injected via route binding)
      * @return JsonResponse
      */
-    public function deleteProofImage(int $answer): JsonResponse
+    public function deleteProofImage(AuditAnswer $answer): JsonResponse
     {
         try {
-            $auditAnswer = AuditAnswer::findOrFail($answer);
-            
             // Authorization check
-            if (!$this->authorizeForAnswer($auditAnswer)) {
+            if (!$this->authorizeForAnswer($answer)) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Unauthorized to delete proof for this answer.'
@@ -399,7 +399,7 @@ class AuditAnswerImageController extends Controller
             }
 
             // Delete the image
-            if (!$this->imageService->deleteProofImage($auditAnswer)) {
+            if (!$this->imageService->deleteProofImage($answer)) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Failed to delete proof image.'
@@ -431,33 +431,31 @@ class AuditAnswerImageController extends Controller
      * Get proof image URL for an audit answer
      * GET /api/audit-answers/{answer}/proof-image/url
      * 
-     * @param int $answer Answer ID
+     * @param AuditAnswer $answer The audit answer model (injected via route binding)
      * @return JsonResponse
      */
-    public function getProofImageUrl(int $answer): JsonResponse
+    public function getProofImageUrl(AuditAnswer $answer): JsonResponse
     {
         try {
-            $auditAnswer = AuditAnswer::findOrFail($answer);
-            
             // Authorization check
-            if (!$this->authorizeForAnswer($auditAnswer)) {
+            if (!$this->authorizeForAnswer($answer)) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Unauthorized to view this answer.'
                 ], 403);
             }
 
-            $url = $this->imageService->getProofImageUrl($auditAnswer);
+            $url = $this->imageService->getProofImageUrl($answer);
 
             return response()->json([
                 'success' => true,
                 'url' => $url,
                 'has_image' => !is_null($url),
                 'image_data' => [
-                    'filename' => $auditAnswer->proof_image_name,
-                    'validated' => $auditAnswer->proof_image_validated,
-                    'validation_error' => $auditAnswer->proof_image_validation_error,
-                    'is_valid_answer' => $auditAnswer->isAnswerValid()
+                    'filename' => $answer->proof_image_name,
+                    'validated' => $answer->proof_image_validated,
+                    'validation_error' => $answer->proof_image_validation_error,
+                    'is_valid_answer' => $answer->isAnswerValid()
                 ]
             ]);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
@@ -467,7 +465,7 @@ class AuditAnswerImageController extends Controller
             ], 404);
         } catch (\Exception $e) {
             Log::error('Error retrieving proof image URL', [
-                'answer_id' => $answer,
+                'answer_id' => $answer->id,
                 'error' => $e->getMessage()
             ]);
             return response()->json([
@@ -634,23 +632,13 @@ class AuditAnswerImageController extends Controller
      * Validate that an answer exists and belongs to the current user's submission
      * GET /api/audit-answers/{answer}/validate-ownership
      * 
-     * @param int $answer Answer ID
+     * @param AuditAnswer $answer The audit answer model (injected via route binding)
      * @return JsonResponse
      */
-    public function validateAnswerOwnership(int $answer): JsonResponse
+    public function validateAnswerOwnership(AuditAnswer $answer): JsonResponse
     {
         try {
-            $auditAnswer = AuditAnswer::find($answer);
-            
-            if (!$auditAnswer) {
-                return response()->json([
-                    'success' => false,
-                    'valid' => false,
-                    'message' => 'Answer does not exist'
-                ]);
-            }
-
-            if (!$this->authorizeForAnswer($auditAnswer)) {
+            if (!$this->authorizeForAnswer($answer)) {
                 return response()->json([
                     'success' => false,
                     'valid' => false,
@@ -661,14 +649,14 @@ class AuditAnswerImageController extends Controller
             return response()->json([
                 'success' => true,
                 'valid' => true,
-                'answer_id' => $auditAnswer->id,
-                'question_id' => $auditAnswer->audit_question_id,
-                'submission_id' => $auditAnswer->audit_submission_id,
-                'question_text' => $auditAnswer->auditQuestion?->question ?? 'Unknown'
+                'answer_id' => $answer->id,
+                'question_id' => $answer->audit_question_id,
+                'submission_id' => $answer->audit_submission_id,
+                'question_text' => $answer->auditQuestion?->question ?? 'Unknown'
             ]);
         } catch (\Exception $e) {
             Log::error('Error validating answer ownership', [
-                'answer_id' => $answer,
+                'answer_id' => $answer->id,
                 'error' => $e->getMessage()
             ]);
             return response()->json([
