@@ -260,28 +260,58 @@ class ProofImageService
                 'disk' => $this->disk,
             ]);
 
-            $path = Storage::disk($this->disk)->putFileAs(
-                $storagePath,
-                $file,
-                $filename
-            );
+            // ✅ CRITICAL: Ensure directory exists before storing
+            try {
+                if (!Storage::disk($this->disk)->exists($storagePath)) {
+                    Storage::disk($this->disk)->makeDirectory($storagePath, 0755, true);
+                    Log::debug('Created storage directory', [
+                        'answer_id' => $answerId,
+                        'storage_path' => $storagePath,
+                    ]);
+                }
+            } catch (Exception $dirError) {
+                Log::warning('Failed to create directory', [
+                    'answer_id' => $answerId,
+                    'storage_path' => $storagePath,
+                    'error' => $dirError->getMessage(),
+                ]);
+                // Don't fail yet - putFileAs might still work
+            }
 
-            if (!$path) {
-                Log::error('Storage::putFileAs returned null/false', [
+            // Try to store the file
+            try {
+                $path = Storage::disk($this->disk)->putFileAs(
+                    $storagePath,
+                    $file,
+                    $filename
+                );
+
+                if (!$path) {
+                    Log::error('Storage::putFileAs returned null/false', [
+                        'answer_id' => $answerId,
+                        'filename' => $filename,
+                        'storage_path' => $storagePath,
+                    ]);
+                    return false;
+                }
+
+                Log::debug('File stored successfully', [
+                    'answer_id' => $answerId,
+                    'filename' => $filename,
+                    'stored_path' => $path,
+                ]);
+
+                return $path;
+            } catch (Exception $putError) {
+                Log::error('Exception in Storage::putFileAs', [
                     'answer_id' => $answerId,
                     'filename' => $filename,
                     'storage_path' => $storagePath,
+                    'error_message' => $putError->getMessage(),
+                    'error_class' => get_class($putError),
                 ]);
-                return false;
+                throw $putError;
             }
-
-            Log::debug('File stored successfully', [
-                'answer_id' => $answerId,
-                'filename' => $filename,
-                'stored_path' => $path,
-            ]);
-
-            return $path;
         } catch (Exception $e) {
             Log::error('Exception in storeFile', [
                 'answer_id' => $answerId,

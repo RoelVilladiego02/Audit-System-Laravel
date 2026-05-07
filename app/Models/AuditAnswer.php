@@ -388,42 +388,64 @@ class AuditAnswer extends Model
      * @param string $imagePath Path where image is stored
      * @param string $imageName Original filename
      * @return bool Whether the image passed validation
+     * @throws Exception if database update fails
      */
     public function storeProofImage(string $imagePath, string $imageName): bool
     {
-        // If answer doesn't require image, accept it anyway
-        if (!$this->requiresProofImage()) {
-            Log::info('Proof image provided for non-yes answer', [
-                'answer_id' => $this->id,
-                'answer' => $this->answer
-            ]);
-            $this->update([
+        try {
+            // If answer doesn't require image, accept it anyway
+            if (!$this->requiresProofImage()) {
+                Log::info('Proof image provided for non-yes answer', [
+                    'answer_id' => $this->id,
+                    'answer' => $this->answer
+                ]);
+                
+                $result = $this->update([
+                    'proof_image_path' => $imagePath,
+                    'proof_image_name' => $imageName,
+                    'proof_image_validated' => true,
+                    'proof_image_validation_error' => null
+                ]);
+                
+                if (!$result) {
+                    throw new \Exception("Failed to update answer {$this->id} with proof image");
+                }
+                
+                return true;
+            }
+
+            // Validate the image name
+            $validation = $this->validateProofImageName($imageName);
+            
+            $result = $this->update([
                 'proof_image_path' => $imagePath,
                 'proof_image_name' => $imageName,
-                'proof_image_validated' => true,
-                'proof_image_validation_error' => null
+                'proof_image_validated' => $validation['valid'],
+                'proof_image_validation_error' => !$validation['valid'] ? $validation['message'] : null
             ]);
-            return true;
+            
+            if (!$result) {
+                throw new \Exception("Failed to update answer {$this->id} with proof image validation results");
+            }
+
+            Log::info('Proof image stored', [
+                'answer_id' => $this->id,
+                'image_path' => $imagePath,
+                'image_name' => $imageName,
+                'validated' => $validation['valid']
+            ]);
+
+            return $validation['valid'];
+        } catch (\Exception $e) {
+            Log::error('Exception in storeProofImage', [
+                'answer_id' => $this->id,
+                'image_path' => $imagePath,
+                'image_name' => $imageName,
+                'error_message' => $e->getMessage(),
+                'error_class' => get_class($e),
+            ]);
+            throw $e;
         }
-
-        // Validate the image name
-        $validation = $this->validateProofImageName($imageName);
-        
-        $this->update([
-            'proof_image_path' => $imagePath,
-            'proof_image_name' => $imageName,
-            'proof_image_validated' => $validation['valid'],
-            'proof_image_validation_error' => !$validation['valid'] ? $validation['message'] : null
-        ]);
-
-        Log::info('Proof image stored', [
-            'answer_id' => $this->id,
-            'image_path' => $imagePath,
-            'image_name' => $imageName,
-            'validated' => $validation['valid']
-        ]);
-
-        return $validation['valid'];
     }
 
     /**

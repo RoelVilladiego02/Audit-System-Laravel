@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Storage;
 
 class AuditAnswerImageController extends Controller
 {
@@ -17,6 +18,133 @@ class AuditAnswerImageController extends Controller
     public function __construct(ProofImageService $imageService)
     {
         $this->imageService = $imageService;
+    }
+
+    /**
+     * Debug endpoint to test a complete upload flow (without actually saving)
+     * POST /api/audit-answers/debug/test-upload
+     * 
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function debugTestUpload(Request $request): JsonResponse
+    {
+        try {
+            $diagnostics = [
+                'timestamp' => now(),
+                'storage_config' => [
+                    'default' => config('filesystems.default'),
+                    'public_root' => config('filesystems.disks.public.root'),
+                    'public_url' => config('filesystems.disks.public.url'),
+                ],
+                'tests' => []
+            ];
+            
+            // Test 1: Can we access the storage disk?
+            try {
+                $canAccess = Storage::disk('public')->exists('.');
+                $diagnostics['tests'][] = [
+                    'name' => 'Storage disk accessible',
+                    'result' => $canAccess ? 'PASS' : 'FAIL'
+                ];
+            } catch (\Exception $e) {
+                $diagnostics['tests'][] = [
+                    'name' => 'Storage disk accessible',
+                    'result' => 'FAIL',
+                    'error' => $e->getMessage()
+                ];
+            }
+            
+            // Test 2: Can we create a directory?
+            try {
+                $testDir = 'proof-images/test_' . time();
+                Storage::disk('public')->makeDirectory($testDir, 0755, true);
+                $diagnostics['tests'][] = [
+                    'name' => 'Create directory',
+                    'result' => 'PASS'
+                ];
+                // Cleanup
+                Storage::disk('public')->deleteDirectory($testDir);
+            } catch (\Exception $e) {
+                $diagnostics['tests'][] = [
+                    'name' => 'Create directory',
+                    'result' => 'FAIL',
+                    'error' => $e->getMessage()
+                ];
+            }
+            
+            // Test 3: Can we write a test file?
+            try {
+                $testFile = 'proof-images/test_' . time() . '.txt';
+                Storage::disk('public')->put($testFile, 'test content');
+                $exists = Storage::disk('public')->exists($testFile);
+                Storage::disk('public')->delete($testFile);
+                $diagnostics['tests'][] = [
+                    'name' => 'Write and delete file',
+                    'result' => $exists ? 'PASS' : 'FAIL'
+                ];
+            } catch (\Exception $e) {
+                $diagnostics['tests'][] = [
+                    'name' => 'Write and delete file',
+                    'result' => 'FAIL',
+                    'error' => $e->getMessage()
+                ];
+            }
+            
+            // Test 4: Test with an actual uploaded file
+            if ($request->hasFile('proof_image')) {
+                try {
+                    $file = $request->file('proof_image');
+                    $diagnostics['tests'][] = [
+                        'name' => 'File received',
+                        'result' => 'PASS',
+                        'file_info' => [
+                            'name' => $file->getClientOriginalName(),
+                            'size' => $file->getSize(),
+                            'type' => $file->getMimeType(),
+                            'is_valid' => $file->isValid()
+                        ]
+                    ];
+                    
+                    // Try to store it
+                    try {
+                        $path = Storage::disk('public')->putFile(
+                            'proof-images/test_uploads',
+                            $file
+                        );
+                        Storage::disk('public')->delete($path);
+                        $diagnostics['tests'][] = [
+                            'name' => 'Upload test file',
+                            'result' => 'PASS',
+                            'path' => $path
+                        ];
+                    } catch (\Exception $uploadE) {
+                        $diagnostics['tests'][] = [
+                            'name' => 'Upload test file',
+                            'result' => 'FAIL',
+                            'error' => $uploadE->getMessage()
+                        ];
+                    }
+                } catch (\Exception $e) {
+                    $diagnostics['tests'][] = [
+                        'name' => 'File handling',
+                        'result' => 'FAIL',
+                        'error' => $e->getMessage()
+                    ];
+                }
+            }
+            
+            return response()->json([
+                'success' => true,
+                'diagnostics' => $diagnostics
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ], 500);
+        }
     }
 
     /**
