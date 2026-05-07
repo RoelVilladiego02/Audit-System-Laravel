@@ -35,20 +35,27 @@ class RouteServiceProvider extends ServiceProvider
             }
         });
 
-        // Custom route binding that ensures the answer belongs to the submission
+        // Custom route binding that ensures the answer belongs to the submission (if submission parameter exists)
         Route::bind('answer', function ($value, $route) {
             try {
-                // Get the submission from the route
+                // Get the submission from the route if it exists (for routes like /submissions/{submission}/answers/{answer})
                 $submission = $route->parameter('submission');
-                if (!$submission) {
-                    abort(404, 'Submission not found');
+                
+                $query = AuditAnswer::where('id', (int) $value);
+                
+                // If submission parameter exists, verify answer belongs to it
+                if ($submission) {
+                    $query->where('audit_submission_id', $submission->id);
                 }
-
-                return AuditAnswer::where('id', (int) $value)
-                    ->where('audit_submission_id', $submission->id)
-                    ->firstOrFail();
+                
+                return $query->firstOrFail();
             } catch (\Exception $e) {
-                abort(404, 'Audit answer not found or does not belong to this submission');
+                // If submission parameter was expected but answer doesn't belong to it
+                if ($route->parameter('submission')) {
+                    abort(404, 'Audit answer not found or does not belong to this submission');
+                }
+                // Otherwise just answer not found
+                abort(404, 'Audit answer not found');
             }
         });
 
