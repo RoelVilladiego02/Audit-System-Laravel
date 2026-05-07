@@ -140,6 +140,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Proof image upload routes for individual answers
     Route::prefix('audit-answers')->name('audit-answers.')->group(function () {
+        // Debug endpoint (must come before /{answer} routes)
+        Route::get('/debug/storage-info', [AuditAnswerImageController::class, 'debugStorageInfo'])
+            ->name('debug-storage-info');
+        
         Route::post('/{answer}/proof-image', [AuditAnswerImageController::class, 'uploadProofImage'])
             ->where('answer', '[0-9]+')
             ->name('upload-proof-image');

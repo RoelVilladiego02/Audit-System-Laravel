@@ -20,6 +20,65 @@ class AuditAnswerImageController extends Controller
     }
 
     /**
+     * Debug endpoint to check storage configuration (development only)
+     * GET /api/audit-answers/debug/storage-info
+     * 
+     * @return JsonResponse
+     */
+    public function debugStorageInfo(): JsonResponse
+    {
+        try {
+            $storageInfo = [
+                'default_disk' => config('filesystems.default'),
+                'available_disks' => array_keys(config('filesystems.disks', [])),
+                'public_disk_root' => config('filesystems.disks.public.root'),
+                'public_disk_url' => config('filesystems.disks.public.url'),
+                'storage_path' => storage_path(),
+                'public_path' => public_path(),
+            ];
+            
+            // Test if public disk exists and is writable
+            try {
+                $testFile = 'debug_test_' . time() . '.txt';
+                Storage::disk('public')->put($testFile, 'test');
+                $testExists = Storage::disk('public')->exists($testFile);
+                Storage::disk('public')->delete($testFile);
+                
+                $storageInfo['public_disk_writable'] = true;
+                $storageInfo['public_disk_test_passed'] = $testExists;
+            } catch (\Exception $e) {
+                $storageInfo['public_disk_writable'] = false;
+                $storageInfo['public_disk_error'] = $e->getMessage();
+            }
+            
+            // Check proof-images directory
+            $proofImagesPath = 'proof-images';
+            try {
+                $exists = Storage::disk('public')->exists($proofImagesPath);
+                $storageInfo['proof_images_dir_exists'] = $exists;
+                
+                if (!$exists) {
+                    // Try to create it
+                    Storage::disk('public')->makeDirectory($proofImagesPath);
+                    $storageInfo['proof_images_dir_created'] = true;
+                }
+            } catch (\Exception $e) {
+                $storageInfo['proof_images_error'] = $e->getMessage();
+            }
+            
+            return response()->json([
+                'success' => true,
+                'storage_info' => $storageInfo
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Upload a proof image for an audit answer
      * POST /api/audit-answers/{answer}/proof-image
      * 
@@ -152,17 +211,41 @@ class AuditAnswerImageController extends Controller
                 'message' => 'Audit answer not found. This answer ID does not exist or may belong to a different submission. Please save your draft again and try uploading.'
             ], 404);
         } catch (\Exception $e) {
-            Log::error('========== ERROR UPLOADING PROOF IMAGE ==========', [
+            $errorDetails = [
                 'answer_id' => $answer,
                 'user_id' => auth()->id(),
                 'exception_type' => class_basename($e),
                 'exception_message' => $e->getMessage(),
                 'file_line' => $e->getFile() . ':' . $e->getLine(),
-                'trace' => $e->getTraceAsString()
-            ]);
+                'trace' => $e->getTraceAsString(),
+                'request_file_name' => $request->file('proof_image')?->getClientOriginalName(),
+                'storage_disk' => config('filesystems.default'),
+                'storage_public_path' => config('filesystems.disks.public.root') ?? 'storage/app/public',
+            ];
+            
+            // Check if storage is working
+            try {
+                $storageTest = Storage::disk('public')->exists('.');
+                $errorDetails['storage_accessible'] = $storageTest;
+            } catch (\Exception $storageE) {
+                $errorDetails['storage_error'] = $storageE->getMessage();
+                $errorDetails['storage_accessible'] = false;
+            }
+            
+            Log::error('========== ERROR UPLOADING PROOF IMAGE ==========', $errorDetails);
+            
+            // Return detailed error info for debugging (include more details than production would)
             return response()->json([
                 'success' => false,
-                'message' => 'An error occurred while uploading the image. Please try again.'
+                'message' => 'An error occurred while uploading the image. Please try again.',
+                'debug' => [
+                    'error_type' => class_basename($e),
+                    'error_message' => $e->getMessage(),
+                    'file' => basename($e->getFile()),
+                    'line' => $e->getLine(),
+                    // Include brief trace for debugging
+                    'brief_trace' => collect(explode("\n", $e->getTraceAsString()))->slice(0, 5)->implode("\n")
+                ]
             ], 500);
         }
     }
