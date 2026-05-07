@@ -48,14 +48,26 @@ class RouteServiceProvider extends ServiceProvider
                     $query->where('audit_submission_id', $submission->id);
                 }
                 
-                return $query->firstOrFail();
-            } catch (\Exception $e) {
-                // If submission parameter was expected but answer doesn't belong to it
-                if ($route->parameter('submission')) {
-                    abort(404, 'Audit answer not found or does not belong to this submission');
+                $answer = $query->first();
+                
+                if (!$answer) {
+                    // If submission parameter was expected but answer doesn't belong to it
+                    if ($route->parameter('submission')) {
+                        abort(404, 'Audit answer not found or does not belong to this submission');
+                    }
+                    // Otherwise just answer not found
+                    abort(404, 'Audit answer not found');
                 }
-                // Otherwise just answer not found
-                abort(404, 'Audit answer not found');
+                
+                return $answer;
+            } catch (\Throwable $e) {
+                // Log but don't rethrow - let Laravel handle it
+                Log::error('Route binding error for answer parameter', [
+                    'answer_id' => $value,
+                    'error' => $e->getMessage(),
+                    'route' => $route->getName()
+                ]);
+                abort(404, 'Could not process request');
             }
         });
 
