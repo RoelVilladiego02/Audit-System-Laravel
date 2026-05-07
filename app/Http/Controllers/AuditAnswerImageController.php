@@ -100,7 +100,16 @@ class AuditAnswerImageController extends Controller
                 'validated_file_name' => $validated['proof_image']->getClientOriginalName(),
             ]);
 
-            $auditAnswer = AuditAnswer::findOrFail($answer);
+            // ✅ CRITICAL: Load answer WITH submission relationship to avoid lazy loading issues
+            $auditAnswer = AuditAnswer::with('auditSubmission')->findOrFail($answer);
+            
+            Log::debug('Answer found and loaded:', [
+                'answer_id' => $auditAnswer->id,
+                'submission_id' => $auditAnswer->audit_submission_id,
+                'has_submission_relation' => $auditAnswer->auditSubmission !== null,
+                'submission_user_id' => $auditAnswer->auditSubmission?->user_id,
+                'current_user_id' => auth()->id(),
+            ]);
             
             // Authorization check - user can only upload for their own submissions
             if (!$this->authorizeForAnswer($auditAnswer)) {
@@ -134,8 +143,15 @@ class AuditAnswerImageController extends Controller
                 'user_submission_answers' => AuditAnswer::whereHas('auditSubmission', fn($q) => 
                     $q->where('user_id', auth()->id())
                 )->count(),
-                'answer_1005_exists' => AuditAnswer::where('id', 1005)->exists(),
-                'all_answer_ids' => AuditAnswer::pluck('id')->toArray(),
+                'answer_found_in_any_submission' => AuditAnswer::where('id', $answer)->exists(),
+                'answer_belongs_to_user' => AuditAnswer::where('id', $answer)
+                    ->whereHas('auditSubmission', fn($q) => $q->where('user_id', auth()->id()))
+                    ->exists(),
+                'answer_details' => AuditAnswer::where('id', $answer)->first() ? [
+                    'id' => AuditAnswer::where('id', $answer)->first()->id,
+                    'submission_id' => AuditAnswer::where('id', $answer)->first()->audit_submission_id,
+                    'submission_user_id' => AuditAnswer::where('id', $answer)->first()?->auditSubmission?->user_id,
+                ] : null,
             ]);
             return response()->json([
                 'success' => false,
@@ -469,6 +485,49 @@ class AuditAnswerImageController extends Controller
         $user = auth()->user();
         $submission = $answer->auditSubmission;
         
-        return $user->id === $submission->user_id || $user->role === 'admin';
+        // Debug logging
+        Log::debug('Authorization check for answer:', [
+            'answer_id' => $answer->id,
+            'user_id' => $user?->id,
+            'user_role' => $user?->role,
+            'submission_id' => $submission?->id,
+            'submission_user_id' => $submission?->user_id,
+            'submission_is_null' => $submission === null,
+            'user_is_null' => $user === null,
+        ]);
+        
+        // Check if submission exists and is properly loaded
+        if (!$submission) {
+            Log::error('Authorization failed: submission is null or not loaded', [
+                'answer_id' => $answer->id,
+                'submission_loaded_relations' => $answer->getRelations(),
+            ]);
+            return false;
+        }
+        
+        // Check authorization: user owns the submission OR is admin
+        $isOwner = $user->id === $submission->user_id;
+        $isAdmin = $user->role === 'admin';
+        
+        if ($isOwner || $isAdmin) {
+            Log::debug('Authorization GRANTED', [
+                'answer_id' => $answer->id,
+                'user_id' => $user->id,
+                'is_owner' => $isOwner,
+                'is_admin' => $isAdmin,
+            ]);
+            return true;
+        }
+        
+        Log::warning('Authorization DENIED', [
+            'answer_id' => $answer->id,
+            'user_id' => $user->id,
+            'submission_user_id' => $submission->user_id,
+            'user_role' => $user->role,
+            'is_owner' => $isOwner,
+            'is_admin' => $isAdmin,
+        ]);
+        
+        return false;
     }
 }
