@@ -200,6 +200,19 @@ class AuditSubmission extends Model
                     ]);
                     throw new \Exception("Failed to verify submission update for field: {$key}");
                 }
+            } elseif ($key === 'system_overall_risk' || $key === 'admin_overall_risk') {
+                // For risk levels, compare as strings (case-insensitive) to avoid type issues
+                $expected = strtolower((string) $value);
+                $actual = strtolower((string) $updated->$key);
+                if ($actual !== $expected) {
+                    Log::error('Submission update verification failed', [
+                        'submission_id' => $this->id,
+                        'field' => $key,
+                        'expected' => $expected,
+                        'actual' => $actual
+                    ]);
+                    throw new \Exception("Failed to verify submission update for field: {$key}");
+                }
             } elseif ($updated->$key !== $value) {
                 Log::error('Submission update verification failed', [
                     'submission_id' => $this->id,

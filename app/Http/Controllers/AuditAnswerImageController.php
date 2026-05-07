@@ -68,12 +68,6 @@ class AuditAnswerImageController extends Controller
                 'answers_for_user' => AuditAnswer::whereHas('auditSubmission', fn($q) => 
                     $q->where('user_id', auth()->id())
                 )->count(),
-                'answer_1005_exists' => AuditAnswer::where('id', 1005)->exists(),
-                'answer_1005_details' => AuditAnswer::find(1005) ? [
-                    'id' => 1005,
-                    'submission_id' => AuditAnswer::find(1005)->audit_submission_id,
-                    'question_id' => AuditAnswer::find(1005)->audit_question_id,
-                ] : null,
             ]);
 
             // Validate file is present and valid BEFORE validation rules

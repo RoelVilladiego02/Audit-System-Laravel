@@ -279,6 +279,10 @@ class AuditSubmissionController extends Controller
                         'reviewed_by' => $answer->reviewed_by ? (int) $answer->reviewed_by : null,
                         'reviewed_at' => $answer->reviewed_at,
                         'is_custom_answer' => (bool) $answer->is_custom_answer,
+                        'proof_image_path' => $answer->proof_image_path,
+                        'proof_image_name' => $answer->proof_image_name,
+                        'proof_image_validated' => (bool) $answer->proof_image_validated,
+                        'proof_image_validation_error' => $answer->proof_image_validation_error,
                         'question' => $answer->question instanceof \App\Models\AuditQuestion ? [
                             'id' => (int) $answer->question->id,
                             'question' => (string) $answer->question->question,
